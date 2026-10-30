@@ -8,31 +8,52 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SMOKESHIELD_", env_file=".env", extra="ignore")
 
+    # model
     model_path: str = "models/best.pt"
     confidence: float = 0.40
     image_size: int = 640
     device: str = ""
-    incident_cooldown: float = 15.0
-    cors_origins: list[str] = ["http://localhost:5173"]
+
+    # alerting defaults (each camera can override these)
+    confirm_frames: int = 3  # alarm only if a hazard shows in N of the last M frames
+    confirm_window: int = 5
+    camera_cooldown: int = 30  # seconds between incidents of the same camera
+    incident_cooldown: float = 15.0  # browser-webcam stream cooldown
+
+    # camera workers
+    worker_fps: float = 4.0  # max inference rate per camera
+    stream_timeout_ms: int = 5000
+
+    # uploads
     max_upload_mb: int = 100
     max_video_frames: int = 300
+
+    # storage / web
+    data_dir: str = "data"
+    cors_origins: list[str] = ["http://localhost:5173"]
 
     @property
     def model_file(self) -> Path:
         p = Path(self.model_path)
         return p if p.is_absolute() else BASE_DIR / p
 
-    @property
-    def data_dir(self) -> Path:
-        d = BASE_DIR / "data"
-        d.mkdir(exist_ok=True)
+    def _dir(self, *parts: str) -> Path:
+        base = Path(self.data_dir)
+        d = (base if base.is_absolute() else BASE_DIR / base).joinpath(*parts)
+        d.mkdir(parents=True, exist_ok=True)
         return d
 
     @property
+    def data_path(self) -> Path:
+        return self._dir()
+
+    @property
     def snapshot_dir(self) -> Path:
-        d = self.data_dir / "snapshots"
-        d.mkdir(exist_ok=True)
-        return d
+        return self._dir("snapshots")
+
+    @property
+    def video_dir(self) -> Path:
+        return self._dir("videos")
 
 
 settings = Settings()

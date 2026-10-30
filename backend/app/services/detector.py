@@ -1,18 +1,16 @@
 """YOLO inference wrapper. Ultralytics is imported lazily so the API (and tests) start without it."""
 
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Protocol
 
-import cv2
 import numpy as np
 
-from .schemas import Detection
+from ..schemas.detection import Detection
 
 log = logging.getLogger("smokeshield.detector")
-
-COLORS = {"fire": (40, 90, 255), "smoke": (200, 200, 200)}  # BGR
 
 
 class DetectorLike(Protocol):
@@ -40,6 +38,8 @@ class YoloDetector:
         self.loaded = False
         self.classes: list[str] = []
         self._model = None
+        # One model is shared by every camera worker and API request; Ultralytics models are not thread-safe.
+        self._lock = threading.Lock()
 
     def load(self) -> None:
         if not self.weights.exists():
@@ -50,8 +50,7 @@ class YoloDetector:
         self._model = YOLO(str(self.weights))
         self.classes = list(self._model.names.values())
         self.loaded = True
-        # warm-up so the first real request is not slow
-        self.predict(np.zeros((self.image_size, self.image_size, 3), np.uint8), 0.5)
+        self.predict(np.zeros((self.image_size, self.image_size, 3), np.uint8), 0.5)  # warm-up
         log.info("Loaded %s (classes: %s)", self.weights.name, self.classes)
 
     def predict(self, frame: np.ndarray, conf: float) -> list[Detection]:
@@ -61,7 +60,8 @@ class YoloDetector:
         kwargs = {"conf": conf, "imgsz": self.image_size, "verbose": False}
         if self.device != "auto":
             kwargs["device"] = self.device
-        result = self._model.predict(frame, **kwargs)[0]
+        with self._lock:
+            result = self._model.predict(frame, **kwargs)[0]
         out: list[Detection] = []
         for box in result.boxes:
             label = _normalise_label(self._model.names[int(box.cls)])
@@ -72,12 +72,7 @@ class YoloDetector:
                 Detection(
                     label=label,  # type: ignore[arg-type]
                     confidence=round(float(box.conf), 4),
-                    box=(
-                        max(0.0, x1 / w),
-                        max(0.0, y1 / h),
-                        min(1.0, x2 / w),
-                        min(1.0, y2 / h),
-                    ),
+                    box=(max(0.0, x1 / w), max(0.0, y1 / h), min(1.0, x2 / w), min(1.0, y2 / h)),
                 )
             )
         return out
@@ -87,24 +82,3 @@ def timed_predict(detector: DetectorLike, frame: np.ndarray, conf: float) -> tup
     t0 = time.perf_counter()
     dets = detector.predict(frame, conf)
     return dets, round((time.perf_counter() - t0) * 1000, 1)
-
-
-def annotate(frame: np.ndarray, detections: list[Detection]) -> np.ndarray:
-    img = frame.copy()
-    h, w = img.shape[:2]
-    for d in detections:
-        x1, y1, x2, y2 = (int(d.box[0] * w), int(d.box[1] * h), int(d.box[2] * w), int(d.box[3] * h))
-        color = COLORS[d.label]
-        cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-        text = f"{d.label.upper()} {d.confidence:.0%}"
-        (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
-        cv2.rectangle(img, (x1, max(0, y1 - th - 8)), (x1 + tw + 8, y1), color, -1)
-        cv2.putText(img, text, (x1 + 4, max(th, y1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 1, cv2.LINE_AA)
-    return img
-
-
-def encode_jpeg(frame: np.ndarray, quality: int = 85) -> bytes:
-    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
-    if not ok:
-        raise ValueError("JPEG encoding failed")
-    return buf.tobytes()

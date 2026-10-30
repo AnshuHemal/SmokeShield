@@ -10,8 +10,14 @@ export default {
       },
       keyframes: {
         pulseRing: { "0%": { boxShadow: "0 0 0 0 rgba(239,68,68,.6)" }, "100%": { boxShadow: "0 0 0 14px rgba(239,68,68,0)" } },
+        shimmer: { "0%": { backgroundPosition: "200% 0" }, "100%": { backgroundPosition: "-200% 0" } },
+        alarm: { "0%,100%": { boxShadow: "0 0 0 1px rgba(239,68,68,.9), 0 0 18px 0 rgba(239,68,68,.25)" }, "50%": { boxShadow: "0 0 0 2px rgba(239,68,68,1), 0 0 34px 4px rgba(239,68,68,.55)" } },
       },
-      animation: { pulseRing: "pulseRing 1.4s ease-out infinite" },
+      animation: {
+        pulseRing: "pulseRing 1.4s ease-out infinite",
+        shimmer: "shimmer 1.6s linear infinite",
+        alarm: "alarm 1.1s ease-in-out infinite",
+      },
     },
   },
   plugins: [],

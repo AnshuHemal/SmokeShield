@@ -2,30 +2,16 @@ import { Camera, CameraOff, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfidenceSlider, PageHeader } from "../components/ui";
 import { api, COLORS, Detection } from "../lib/api";
+import { beep } from "../lib/sound";
 
 interface Reply {
   detections: Detection[];
   latency_ms: number;
-  alert: boolean;
+  alert: boolean; // temporally confirmed (N of the last M frames)
   error?: string;
 }
 
 const SEND_WIDTH = 640;
-
-function beep() {
-  try {
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    osc.type = "square";
-    osc.frequency.value = 880;
-    osc.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.25);
-    osc.onended = () => ctx.close();
-  } catch {
-    /* audio unavailable */
-  }
-}
 
 export default function LiveMonitor({ ready }: { ready: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -137,7 +123,7 @@ export default function LiveMonitor({ ready }: { ready: boolean }) {
     <>
       <PageHeader
         title="Live Monitor"
-        subtitle="Real-time detection from your webcam over a WebSocket stream."
+        subtitle="Quick test using this browser's webcam. For permanent cameras, use Cameras."
         action={
           <div className="flex flex-wrap items-center gap-4">
             <ConfidenceSlider value={conf} onChange={setConf} />
