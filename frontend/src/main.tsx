@@ -4,16 +4,19 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { ToastProvider } from "./components/Toast";
 import { EventsProvider } from "./hooks/useEvents";
+import { ThemeProvider } from "./hooks/useTheme";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <ToastProvider>
-        <EventsProvider>
-          <App />
-        </EventsProvider>
-      </ToastProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <ToastProvider>
+          <EventsProvider>
+            <App />
+          </EventsProvider>
+        </ToastProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   </React.StrictMode>,
 );

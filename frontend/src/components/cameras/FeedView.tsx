@@ -1,7 +1,7 @@
 import { History, Settings2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFramePoll } from "../../hooks/useFramePoll";
-import { Camera, CameraState, COLORS } from "../../lib/api";
+import { Camera, CameraState, LABEL_COLOR } from "../../lib/api";
 import { Modal } from "../Modal";
 import { StatusPill } from "../StatusPill";
 import { isLive } from "./CameraTile";
@@ -28,7 +28,7 @@ function Body({ camera, state, onEdit, onClose }: { camera: Camera; state?: Came
 
   return (
     <div className="grid gap-6 p-6 lg:grid-cols-[1fr_260px]">
-      <div className="relative aspect-video overflow-hidden rounded-lg bg-black">
+      <div className="relative aspect-video overflow-hidden rounded-lg bg-black on-media">
         {frame ? (
           <img src={frame} alt={`${camera.name} live view`} className="h-full w-full object-contain" />
         ) : (
@@ -52,7 +52,7 @@ function Body({ camera, state, onEdit, onClose }: { camera: Camera; state?: Came
           {state?.detections.length ? (
             state.detections.map((d, i) => (
               <div key={i} className="flex justify-between">
-                <span className="capitalize" style={{ color: COLORS[d.label] }}>{d.label}</span>
+                <span className="capitalize" style={{ color: LABEL_COLOR[d.label] }}>{d.label}</span>
                 <span className="tabular-nums">{Math.round(d.confidence * 100)}%</span>
               </div>
             ))

@@ -1,11 +1,11 @@
 import { ReactNode } from "react";
-import { COLORS, Label, ReviewStatus } from "../lib/api";
+import { Label, LABEL_COLOR, labelTint, ReviewStatus } from "../lib/api";
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-semibold text-white">{title}</h1>
+        <h1 className="text-2xl font-semibold text-heading">{title}</h1>
         <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
       </div>
       {action}
@@ -17,7 +17,7 @@ export function StatCard({ label, value, hint, accent }: { label: string; value:
   return (
     <div className="card p-5">
       <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-2 text-3xl font-semibold text-white" style={accent ? { color: accent } : undefined}>
+      <div className="mt-2 text-3xl font-semibold text-heading" style={accent ? { color: accent } : undefined}>
         {value}
       </div>
       {hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}
@@ -29,9 +29,9 @@ export function LabelBadge({ label }: { label: Label }) {
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase"
-      style={{ background: COLORS[label] + "26", color: COLORS[label] }}
+      style={{ background: labelTint(label), color: LABEL_COLOR[label] }}
     >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: COLORS[label] }} />
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: LABEL_COLOR[label] }} />
       {label}
     </span>
   );

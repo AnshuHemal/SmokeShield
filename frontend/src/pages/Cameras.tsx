@@ -96,7 +96,7 @@ export default function Cameras() {
 
                 <div className="min-w-0 flex-1 basis-56">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate font-semibold text-white">{c.name}</h2>
+                    <h2 className="truncate font-semibold text-heading">{c.name}</h2>
                     <StatusPill status={status} />
                   </div>
                   <div className="mt-0.5 truncate font-mono text-xs text-slate-500" title={c.source}>
@@ -112,7 +112,7 @@ export default function Cameras() {
 
                 <div className="ml-auto flex items-center gap-3">
                   <Switch checked={c.enabled} disabled={busy === c.id} onChange={(v) => toggle(c, v)} label={`${c.enabled ? "Pause" : "Resume"} ${c.name}`} />
-                  <button onClick={() => openForm(c)} aria-label={`Edit ${c.name}`} className="rounded-lg p-2 text-slate-400 hover:bg-ink-700 hover:text-white"><Pencil size={17} /></button>
+                  <button onClick={() => openForm(c)} aria-label={`Edit ${c.name}`} className="rounded-lg p-2 text-slate-400 hover:bg-ink-700 hover:text-heading"><Pencil size={17} /></button>
                   <button onClick={() => setDeleting(c)} aria-label={`Delete ${c.name}`} className="rounded-lg p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-400"><Trash2 size={17} /></button>
                 </div>
               </motion.li>

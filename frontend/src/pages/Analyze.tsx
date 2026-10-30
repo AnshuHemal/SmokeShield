@@ -2,7 +2,7 @@ import { FileVideo, Loader2, UploadCloud } from "lucide-react";
 import { DragEvent, useRef, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ConfidenceSlider, PageHeader, StatCard } from "../components/ui";
-import { api, COLORS, ImageResult, VideoResult } from "../lib/api";
+import { api, LABEL_COLOR, ImageResult, VideoResult } from "../lib/api";
 
 type Result = { kind: "image"; data: ImageResult } | { kind: "video"; data: VideoResult };
 
@@ -57,7 +57,7 @@ export default function Analyze({ ready }: { ready: boolean }) {
         ) : (
           <>
             <UploadCloud size={36} className="text-ember-400" />
-            <div className="mt-3 font-medium text-white">Drop a file here or click to browse</div>
+            <div className="mt-3 font-medium text-heading">Drop a file here or click to browse</div>
             <div className="mt-1 text-xs text-slate-500">JPG, PNG, MP4, AVI, MOV · up to 100 MB</div>
           </>
         )}
@@ -91,7 +91,7 @@ function ImagePanel({ r }: { r: ImageResult }) {
           {r.detections.length === 0 && <div className="text-sm text-slate-500">None</div>}
           {r.detections.map((d, i) => (
             <div key={i} className="flex justify-between text-sm">
-              <span className="font-medium capitalize" style={{ color: COLORS[d.label] }}>{d.label}</span>
+              <span className="font-medium capitalize" style={{ color: LABEL_COLOR[d.label] }}>{d.label}</span>
               <span className="tabular-nums">{Math.round(d.confidence * 100)}%</span>
             </div>
           ))}
@@ -108,28 +108,28 @@ function VideoPanel({ r }: { r: VideoResult }) {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Duration" value={`${r.duration_s}s`} />
         <StatCard label="Frames analysed" value={r.frames_analysed} />
-        <StatCard label="Fire frames" value={r.fire_frames} accent={COLORS.fire} />
-        <StatCard label="Smoke frames" value={r.smoke_frames} accent={COLORS.smoke} />
+        <StatCard label="Fire frames" value={r.fire_frames} accent={LABEL_COLOR.fire} />
+        <StatCard label="Smoke frames" value={r.smoke_frames} accent={LABEL_COLOR.smoke} />
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="card p-5">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-white"><FileVideo size={16} /> Confidence timeline</h2>
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-heading"><FileVideo size={16} /> Confidence timeline</h2>
           <div className="h-60">
             <ResponsiveContainer>
               <LineChart data={r.timeline} margin={{ left: -20 }}>
-                <CartesianGrid stroke="#222632" vertical={false} />
-                <XAxis dataKey="time_s" unit="s" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 1]} tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: "#171a22", border: "1px solid #2f3443", borderRadius: 8 }} />
-                <Line type="monotone" dataKey="fire" stroke={COLORS.fire} dot={false} strokeWidth={2} />
-                <Line type="monotone" dataKey="smoke" stroke={COLORS.smoke} dot={false} strokeWidth={2} />
+                <CartesianGrid stroke="rgb(var(--ink-700))" vertical={false} />
+                <XAxis dataKey="time_s" unit="s" tick={{ fill: "rgb(var(--slate-500))", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 1]} tick={{ fill: "rgb(var(--slate-500))", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "rgb(var(--ink-900))", border: "1px solid rgb(var(--ink-600))", borderRadius: 8 }} labelStyle={{ color: "rgb(var(--slate-300))" }} />
+                <Line type="monotone" dataKey="fire" stroke={LABEL_COLOR.fire} dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="smoke" stroke={LABEL_COLOR.smoke} dot={false} strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </section>
         {r.peak_frame && (
           <section className="card p-5">
-            <h2 className="mb-4 text-sm font-semibold text-white">Peak frame ({Math.round(r.peak_confidence * 100)}%)</h2>
+            <h2 className="mb-4 text-sm font-semibold text-heading">Peak frame ({Math.round(r.peak_confidence * 100)}%)</h2>
             <img src={r.peak_frame} alt="Peak detection frame" className="w-full rounded-lg" />
           </section>
         )}

@@ -178,7 +178,7 @@ export default function Incidents() {
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="card overflow-hidden"
               >
-                <button onClick={() => setOpen(i)} className="group relative block aspect-video w-full bg-black" aria-label={`Open incident ${i.id}`}>
+                <button onClick={() => setOpen(i)} className="group relative block aspect-video w-full bg-black on-media" aria-label={`Open incident ${i.id}`}>
                   {i.snapshot_url && <img src={i.snapshot_url} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />}
                   <div className="absolute left-3 top-3"><LabelBadge label={i.label} /></div>
                   <div className="absolute right-3 top-3 rounded-md bg-black/60 px-2 py-0.5 text-xs font-semibold tabular-nums text-white backdrop-blur">{Math.round(i.confidence * 100)}%</div>
@@ -186,7 +186,7 @@ export default function Incidents() {
                 <div className="space-y-3 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-white">{i.camera_name ?? `${i.source[0].toUpperCase()}${i.source.slice(1)} upload`}</div>
+                      <div className="truncate text-sm font-medium text-heading">{i.camera_name ?? `${i.source[0].toUpperCase()}${i.source.slice(1)} upload`}</div>
                       <div className="text-xs text-slate-500" title={new Date(i.created_at).toLocaleString()}>{timeAgo(i.created_at)}</div>
                     </div>
                     <ReviewBadge status={i.status} />
@@ -224,7 +224,7 @@ function AccuracyBar({ stats }: { stats: Stats }) {
   return (
     <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="card mb-6 p-4">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-sm">
-        <span className="font-medium text-white">Alert accuracy <span className="font-normal text-slate-500">· from {stats.reviewed} reviewed incidents</span></span>
+        <span className="font-medium text-heading">Alert accuracy <span className="font-normal text-slate-500">· from {stats.reviewed} reviewed incidents</span></span>
         <span className="text-slate-400"><b className="text-emerald-300">{stats.real}</b> real · <b className="text-amber-300">{stats.false_alarms}</b> false alarms</span>
       </div>
       <div className="flex h-2.5 overflow-hidden rounded-full bg-amber-500/40" role="img" aria-label={`${Math.round(real)} percent of reviewed alerts were real`}>

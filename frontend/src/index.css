@@ -2,16 +2,116 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens. Values are RGB channels ("r g b") so Tailwind can add opacity.
+ * :root is the light theme; `.dark` on <html> switches to dark. `.on-media` re-applies the dark
+ * tokens inside a subtree that sits on top of video or photos, so overlays stay readable in both themes.
+ */
+:root {
+  color-scheme: light;
+
+  --ink-950: 243 244 247;
+  --ink-900: 255 255 255;
+  --ink-800: 241 243 246;
+  --ink-700: 226 230 236;
+  --ink-600: 203 210 220;
+
+  --heading: 15 23 42;
+  --slate-100: 15 23 42;
+  --slate-200: 30 41 59;
+  --slate-300: 51 65 85;
+  --slate-400: 71 85 105;
+  --slate-500: 90 102 122;
+  --slate-600: 100 113 133;
+
+  --ember-400: 168 54 10;
+  --ember-500: 194 65 12;
+  --ember-600: 154 52 18;
+  --ember-solid: 194 65 12;
+  --ember-solid-hover: 154 52 18;
+
+  --fire: 190 44 12;
+  --smoke: 71 85 105;
+  --warn: 180 83 9;
+
+  --emerald-300: 4 120 87;
+  --emerald-400: 4 120 87;
+  --amber-200: 146 64 14;
+  --amber-300: 161 70 8;
+  --amber-400: 217 119 6;
+  --red-200: 153 27 27;
+  --red-300: 185 28 28;
+  --red-400: 220 38 38;
+  --sky-300: 3 105 161;
+  --sky-400: 2 132 199;
+
+  --card-shadow: 0 1px 2px rgb(15 23 42 / 0.05), 0 1px 3px rgb(15 23 42 / 0.06);
+}
+
+.dark,
+.on-media {
+  --ink-950: 10 11 15;
+  --ink-900: 16 18 24;
+  --ink-800: 23 26 34;
+  --ink-700: 34 38 50;
+  --ink-600: 47 52 67;
+
+  --heading: 255 255 255;
+  --slate-100: 241 245 249;
+  --slate-200: 226 232 240;
+  --slate-300: 203 213 225;
+  --slate-400: 148 163 184;
+  --slate-500: 125 140 162;
+  --slate-600: 118 132 154;
+
+  --ember-400: 255 138 76;
+  --ember-500: 255 106 43;
+  --ember-600: 229 80 26;
+  --ember-solid: 194 65 12;
+  --ember-solid-hover: 154 52 18;
+
+  --fire: 255 90 54;
+  --smoke: 148 163 184;
+  --warn: 251 191 36;
+
+  --emerald-300: 110 231 183;
+  --emerald-400: 52 211 153;
+  --amber-200: 253 230 138;
+  --amber-300: 252 211 77;
+  --amber-400: 251 191 36;
+  --red-200: 254 202 202;
+  --red-300: 252 165 165;
+  --red-400: 248 113 113;
+  --sky-300: 125 211 252;
+  --sky-400: 56 189 248;
+
+  --card-shadow: none;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
 @layer base {
-  html { color-scheme: dark; }
+  body { @apply bg-ink-950 text-slate-200; }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-thumb { background: #2f3443; border-radius: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgb(var(--ink-600)); border-radius: 8px; }
+}
+
+/* Short cross-fade while switching theme (added/removed by ThemeProvider; skipped for reduced motion). */
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-transition,
+  html.theme-transition *,
+  html.theme-transition *::before,
+  html.theme-transition *::after {
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, fill 0.25s ease, stroke 0.25s ease, box-shadow 0.25s ease !important;
+  }
 }
 
 @layer components {
-  .card { @apply rounded-xl border border-ink-700 bg-ink-900; }
+  .card { @apply rounded-xl border border-ink-700 bg-ink-900 shadow-card; }
   .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50; }
-  .btn-primary { @apply btn bg-ember-500 text-white hover:bg-ember-600; }
+  .btn-primary { @apply btn bg-ember-solid text-white hover:bg-ember-solid-hover; }
   .btn-ghost { @apply btn border border-ink-600 bg-ink-800 text-slate-200 hover:bg-ink-700; }
   .input { @apply w-full rounded-lg border border-ink-600 bg-ink-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 transition focus:border-ember-500 focus:outline-none focus:ring-1 focus:ring-ember-500; }
 }

@@ -19,6 +19,7 @@ Real-time fire and smoke detection platform: a **FastAPI + Ultralytics YOLO** ba
 - **Analyze Media** – drag-and-drop images or videos with a confidence timeline and peak frame
 - **Browser Cam** – quick webcam test from the browser over WebSocket
 - **Dashboard** – animated metrics, 24-hour chart (in local time), camera health, recent incidents
+- **Light / Dark / System theme** – follows the OS live, remembers your choice, no flash on load, WCAG AA contrast in both themes
 - Light-weight SQLite database with automatic in-place migration, model health reporting, 23 automated tests
 
 ## Architecture
@@ -139,9 +140,15 @@ backend/
 frontend/src/
   pages/        Dashboard, Monitor, Cameras, Incidents, LiveMonitor, Analyze
   components/   Modal, Toast, StatusPill, Switch, Skeleton, ... and cameras/ (tile, form, zone editor)
-  hooks/        useEvents (shared WebSocket), useCameras, useFramePoll
+  hooks/        useEvents (shared WebSocket), useCameras, useFramePoll, useTheme
   lib/          api client, alarm sound
 ```
+
+## Theming
+Colors are CSS-variable tokens in `frontend/src/index.css` (`:root` = light, `.dark` = dark), mapped into Tailwind in `tailwind.config.js`, so components use ordinary classes (`bg-ink-900`, `text-slate-400`, `text-heading`) and switch themes automatically. To retheme the app, edit the token values. Rules of thumb:
+- Use `text-heading` for headings (not `text-white`); keep `text-white` only on solid colored backgrounds such as the red or orange buttons.
+- Anything drawn over video or photos gets the `on-media` class, which keeps dark tokens inside it so overlays stay readable in light mode.
+- Charts take colors from the same variables (`rgb(var(--ink-700))`); only `<canvas>` drawing uses fixed colors.
 
 ## Security notes
 There is no login yet, so run it on a trusted network. Camera URLs may point at private IPs by design (LAN cameras); only `rtsp`, `rtsps`, `rtmp`, `http`, `https` schemes are accepted. Stream passwords are stored in the local SQLite file in plain text and masked in API responses.

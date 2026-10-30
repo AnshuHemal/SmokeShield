@@ -57,7 +57,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             >
               <div className="mt-0.5">{STYLE[t.tone].icon}</div>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-white">{t.title}</div>
+                <div className="text-sm font-semibold text-heading">{t.title}</div>
                 {t.description && <div className="mt-0.5 text-sm text-slate-400">{t.description}</div>}
                 {t.action && (
                   <button

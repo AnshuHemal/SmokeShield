@@ -6,7 +6,7 @@ const CONFIG: Record<CameraStatus, { label: string; dot: string; chip: string; p
   fire: { label: "Fire detected", dot: "bg-red-500", chip: "bg-red-500/25 text-red-300", pulse: true },
   offline: { label: "Offline", dot: "bg-slate-500", chip: "bg-slate-500/20 text-slate-400" },
   starting: { label: "Connecting", dot: "bg-sky-400", chip: "bg-sky-500/15 text-sky-300", pulse: true },
-  disabled: { label: "Paused", dot: "bg-slate-600", chip: "bg-ink-700 text-slate-500" },
+  disabled: { label: "Paused", dot: "bg-slate-600", chip: "bg-ink-700 text-slate-400" },
 };
 
 export function StatusPill({ status, compact = false }: { status: CameraStatus; compact?: boolean }) {

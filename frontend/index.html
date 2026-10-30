@@ -1,16 +1,29 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="SmokeShield - real-time fire and smoke detection powered by YOLO" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0a0b0f" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <title>SmokeShield</title>
+    <!-- Apply the saved theme before first paint so there is no flash of the wrong theme. Keep in sync with useTheme.tsx. -->
+    <script>
+      (function () {
+        var pref = "system";
+        try { pref = localStorage.getItem("smokeshield.theme") || "system"; } catch (e) {}
+        var dark = pref === "dark" || (pref !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", dark);
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        document.querySelector('meta[name="theme-color"]').setAttribute("content", dark ? "#0a0b0f" : "#f3f4f7");
+      })();
+    </script>
   </head>
-  <body class="bg-ink-950 text-slate-200 antialiased">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

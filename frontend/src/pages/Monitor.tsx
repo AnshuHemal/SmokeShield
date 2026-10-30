@@ -49,7 +49,7 @@ export default function Monitor() {
             <div className="flex overflow-hidden rounded-lg border border-ink-600" role="group" aria-label="Grid density">
               {[2, 3, 4].map((n) => (
                 <button key={n} onClick={() => setDensity(n)} aria-pressed={density === n} aria-label={`${n} columns`}
-                  className={`px-3 py-2 text-sm ${density === n ? "bg-ink-600 text-white" : "bg-ink-800 text-slate-500 hover:text-slate-200"}`}>
+                  className={`px-3 py-2 text-sm ${density === n ? "bg-ink-600 text-heading" : "bg-ink-800 text-slate-500 hover:text-slate-200"}`}>
                   <LayoutGrid size={16} className="inline" /> {n}
                 </button>
               ))}
@@ -115,7 +115,7 @@ export default function Monitor() {
 
       {cameras && cameras.length > 0 && (
         <p className="mt-6 text-center text-xs text-slate-600">
-          <Link to="/cameras" className="inline-flex items-center gap-1 hover:text-slate-400"><Settings2 size={12} /> Manage cameras</Link>
+          <Link to="/cameras" className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-300"><Settings2 size={12} /> Manage cameras</Link>
         </p>
       )}
 

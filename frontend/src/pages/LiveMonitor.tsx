@@ -1,7 +1,7 @@
 import { Camera, CameraOff, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfidenceSlider, PageHeader } from "../components/ui";
-import { api, COLORS, Detection } from "../lib/api";
+import { api, COLORS, Detection, LABEL_COLOR } from "../lib/api";
 import { beep } from "../lib/sound";
 
 interface Reply {
@@ -142,7 +142,7 @@ export default function LiveMonitor({ ready }: { ready: boolean }) {
 
       <div className="grid gap-6 xl:grid-cols-[1fr_300px]">
         <div className={`card relative overflow-hidden ${alert ? "animate-pulseRing border-red-500" : ""}`}>
-          <div className="relative aspect-video bg-black">
+          <div className="relative aspect-video bg-black on-media">
             <video ref={videoRef} muted playsInline className="absolute inset-0 h-full w-full object-contain" />
             <canvas ref={overlayRef} className="absolute inset-0 h-full w-full object-contain" />
             {!running && (
@@ -159,7 +159,7 @@ export default function LiveMonitor({ ready }: { ready: boolean }) {
         </div>
 
         <aside className="card space-y-4 p-5">
-          <h2 className="text-sm font-semibold text-white">Stream stats</h2>
+          <h2 className="text-sm font-semibold text-heading">Stream stats</h2>
           <Row k="Status" v={running ? "Streaming" : "Idle"} />
           <Row k="Throughput" v={`${info.fps} fps`} />
           <Row k="Inference" v={`${info.latency} ms`} />
@@ -170,7 +170,7 @@ export default function LiveMonitor({ ready }: { ready: boolean }) {
             ) : (
               info.dets.map((d, i) => (
                 <div key={i} className="flex justify-between text-sm">
-                  <span className="capitalize" style={{ color: COLORS[d.label] }}>{d.label}</span>
+                  <span className="capitalize" style={{ color: LABEL_COLOR[d.label] }}>{d.label}</span>
                   <span className="tabular-nums">{Math.round(d.confidence * 100)}%</span>
                 </div>
               ))

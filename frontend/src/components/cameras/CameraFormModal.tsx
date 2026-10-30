@@ -150,7 +150,7 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
                 type="button"
                 onClick={() => pickType(type)}
                 aria-pressed={f.source_type === type}
-                className={`flex items-center gap-3 rounded-xl border p-3 text-left text-sm transition ${f.source_type === type ? "border-ember-500 bg-ember-500/10 text-white" : "border-ink-600 bg-ink-800 text-slate-400 hover:border-ink-600 hover:text-slate-200"}`}
+                className={`flex items-center gap-3 rounded-xl border p-3 text-left text-sm transition ${f.source_type === type ? "border-ember-500 bg-ember-500/10 text-heading" : "border-ink-600 bg-ink-800 text-slate-400 hover:border-ink-600 hover:text-slate-200"}`}
               >
                 <Icon size={18} className={f.source_type === type ? "text-ember-400" : ""} /> {label}
               </button>
@@ -195,7 +195,7 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
       {/* ---- sensitivity ---- */}
       <section className="space-y-4">
         <div>
-          <h3 className="text-sm font-semibold text-white">Detection sensitivity</h3>
+          <h3 className="text-sm font-semibold text-heading">Detection sensitivity</h3>
           <p className="text-xs text-slate-500">Tune per camera - a kitchen and a warehouse should not share one threshold.</p>
         </div>
 
@@ -208,7 +208,7 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
               onClick={() => setF((s) => ({ ...s, confidence: p.confidence, confirm_frames: p.confirm_frames, confirm_window: p.confirm_window, cooldown: p.cooldown }))}
               className={`rounded-xl border p-3 text-left transition ${preset?.name === p.name ? "border-ember-500 bg-ember-500/10" : "border-ink-600 bg-ink-800 hover:border-slate-500"}`}
             >
-              <div className="text-sm font-semibold text-white">{p.name}</div>
+              <div className="text-sm font-semibold text-heading">{p.name}</div>
               <div className="text-xs text-slate-500">{p.note}</div>
             </button>
           ))}
@@ -243,7 +243,7 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-white"><ScanEye size={16} /> Detection zone</h3>
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-heading"><ScanEye size={16} /> Detection zone</h3>
             <p className="text-xs text-slate-500">Ignore areas such as a window, a kitchen hob or a street outside.</p>
           </div>
           <Switch checked={f.zoneEnabled} onChange={(v) => set("zoneEnabled", v)} label="Limit detection to a zone" />
@@ -271,7 +271,7 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
 
       <div className="flex items-center justify-between rounded-xl bg-ink-800 p-4">
         <div>
-          <div className="text-sm font-medium text-white">Start monitoring</div>
+          <div className="text-sm font-medium text-heading">Start monitoring</div>
           <div className="text-xs text-slate-500">Disabled cameras are saved but not processed.</div>
         </div>
         <Switch checked={f.enabled} onChange={(v) => set("enabled", v)} label="Enable camera" />
@@ -308,9 +308,9 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 function Stepper({ value, min, max, onChange, label }: { value: number; min: number; max: number; onChange: (n: number) => void; label: string }) {
   return (
     <span className="inline-flex items-center overflow-hidden rounded-lg border border-ink-600 bg-ink-800" role="group" aria-label={label}>
-      <button type="button" aria-label={`Decrease ${label}`} onClick={() => onChange(Math.max(min, value - 1))} className="px-2.5 py-1 text-slate-400 hover:bg-ink-700 hover:text-white">−</button>
-      <span className="w-7 text-center font-semibold tabular-nums text-white">{value}</span>
-      <button type="button" aria-label={`Increase ${label}`} onClick={() => onChange(Math.min(max, value + 1))} className="px-2.5 py-1 text-slate-400 hover:bg-ink-700 hover:text-white">+</button>
+      <button type="button" aria-label={`Decrease ${label}`} onClick={() => onChange(Math.max(min, value - 1))} className="px-2.5 py-1 text-slate-400 hover:bg-ink-700 hover:text-heading">−</button>
+      <span className="w-7 text-center font-semibold tabular-nums text-heading">{value}</span>
+      <button type="button" aria-label={`Increase ${label}`} onClick={() => onChange(Math.min(max, value + 1))} className="px-2.5 py-1 text-slate-400 hover:bg-ink-700 hover:text-heading">+</button>
     </span>
   );
 }

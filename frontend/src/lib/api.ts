@@ -200,7 +200,12 @@ function wsUrl(path: string) {
   return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${path}`;
 }
 
+/** Fixed colours for canvas drawing over video (a canvas cannot read CSS variables). */
 export const COLORS: Record<Label, string> = { fire: "#ff5a36", smoke: "#94a3b8" };
+
+/** Theme-aware label colours for UI text and charts: they resolve through CSS variables. */
+export const LABEL_COLOR: Record<Label, string> = { fire: "rgb(var(--fire))", smoke: "rgb(var(--smoke))" };
+export const labelTint = (label: Label, alpha = 0.15) => `rgb(var(--${label}) / ${alpha})`;
 
 export const timeAgo = (iso: string) => {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);

@@ -23,7 +23,7 @@ export function CameraTile({ camera, state, onOpen }: { camera: Camera; state?: 
       aria-label={`Open ${camera.name}`}
       className={`group relative block w-full overflow-hidden rounded-xl border bg-ink-900 text-left transition-colors ${ring}`}
     >
-      <div className="relative aspect-video bg-black">
+      <div className="relative aspect-video bg-black on-media">
         {frame ? (
           <img src={frame} alt={`${camera.name} live view`} className="absolute inset-0 h-full w-full object-cover" />
         ) : (
@@ -40,7 +40,7 @@ export function CameraTile({ camera, state, onOpen }: { camera: Camera; state?: 
 
         <div className="absolute inset-x-3 bottom-3 flex items-end justify-between gap-2">
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-white">{camera.name}</div>
+            <div className="truncate text-sm font-semibold text-heading">{camera.name}</div>
             {state && isLive(status) && (
               <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-300">
                 <Gauge size={12} /> {state.fps} fps · {state.latency_ms} ms
@@ -50,7 +50,7 @@ export function CameraTile({ camera, state, onOpen }: { camera: Camera; state?: 
           {state?.detections.length ? (
             <div className="flex gap-1">
               {state.detections.slice(0, 3).map((d, i) => (
-                <span key={i} className={`rounded px-1.5 py-0.5 text-xs font-bold uppercase ${d.label === "fire" ? "bg-red-600 text-white" : "bg-slate-300 text-slate-900"}`}>
+                <span key={i} className={`rounded px-1.5 py-0.5 text-xs font-bold uppercase ${d.label === "fire" ? "bg-red-600 text-white" : "bg-white/90 text-slate-900"}`}>
                   {d.label} {Math.round(d.confidence * 100)}%
                 </span>
               ))}

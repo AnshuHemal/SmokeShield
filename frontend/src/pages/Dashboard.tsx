@@ -10,13 +10,13 @@ import { StatusPill } from "../components/StatusPill";
 import { Empty, LabelBadge, PageHeader, ReviewBadge } from "../components/ui";
 import { useCameras } from "../hooks/useCameras";
 import { useEvents } from "../hooks/useEvents";
-import { api, COLORS, Incident, Stats, timeAgo } from "../lib/api";
+import { api, LABEL_COLOR, Incident, Stats, timeAgo } from "../lib/api";
 
 function Metric({ label, children, hint, accent }: { label: string; children: React.ReactNode; hint?: string; accent?: string }) {
   return (
     <motion.div variants={staggerItem} className="card p-5">
       <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-2 text-3xl font-semibold text-white" style={accent ? { color: accent } : undefined}>{children}</div>
+      <div className="mt-2 text-3xl font-semibold text-heading" style={accent ? { color: accent } : undefined}>{children}</div>
       {hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}
     </motion.div>
   );
@@ -59,12 +59,12 @@ export default function Dashboard() {
       ) : (
         <motion.div variants={staggerContainer} initial="hidden" animate="show" className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
           <Metric label="Total incidents"><AnimatedNumber value={stats.total} /></Metric>
-          <Metric label="Fire" accent={COLORS.fire}><AnimatedNumber value={stats.fire} /></Metric>
-          <Metric label="Smoke" accent={COLORS.smoke}><AnimatedNumber value={stats.smoke} /></Metric>
+          <Metric label="Fire" accent={LABEL_COLOR.fire}><AnimatedNumber value={stats.fire} /></Metric>
+          <Metric label="Smoke" accent={LABEL_COLOR.smoke}><AnimatedNumber value={stats.smoke} /></Metric>
           <Metric label="Cameras online" hint={total ? `${total - online} offline or paused` : "None added yet"}>
             <AnimatedNumber value={online} /><span className="text-xl text-slate-500"> / {total}</span>
           </Metric>
-          <Metric label="False alarm rate" hint={far == null ? "Review incidents to measure" : `${stats.reviewed} reviewed`} accent={far != null && far > 0.3 ? "#fbbf24" : undefined}>
+          <Metric label="False alarm rate" hint={far == null ? "Review incidents to measure" : `${stats.reviewed} reviewed`} accent={far != null && far > 0.3 ? "rgb(var(--warn))" : undefined}>
             {far == null ? "–" : <AnimatedNumber value={far * 100} format={(n) => `${Math.round(n)}%`} />}
           </Metric>
           <Metric label="Avg confidence" hint={`${stats.last_24h} in last 24h`}>
@@ -75,16 +75,16 @@ export default function Dashboard() {
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <section className="card p-5 xl:col-span-2">
-          <h2 className="mb-4 text-sm font-semibold text-white">Incidents - last 24 hours</h2>
+          <h2 className="mb-4 text-sm font-semibold text-heading">Incidents - last 24 hours</h2>
           <div className="h-64">
             <ResponsiveContainer>
               <BarChart data={hourly} margin={{ left: -20 }}>
-                <CartesianGrid stroke="#222632" vertical={false} />
-                <XAxis dataKey="hour" tick={{ fill: "#64748b", fontSize: 11 }} interval={2} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: "#171a22", border: "1px solid #2f3443", borderRadius: 8 }} cursor={{ fill: "#ffffff08" }} />
-                <Bar dataKey="fire" stackId="a" fill={COLORS.fire} />
-                <Bar dataKey="smoke" stackId="a" fill={COLORS.smoke} radius={[4, 4, 0, 0]} />
+                <CartesianGrid stroke="rgb(var(--ink-700))" vertical={false} />
+                <XAxis dataKey="hour" tick={{ fill: "rgb(var(--slate-500))", fontSize: 11 }} interval={2} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fill: "rgb(var(--slate-500))", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "rgb(var(--ink-900))", border: "1px solid rgb(var(--ink-600))", borderRadius: 8 }} labelStyle={{ color: "rgb(var(--slate-300))" }} cursor={{ fill: "rgb(var(--slate-500) / 0.12)" }} />
+                <Bar dataKey="fire" stackId="a" fill={LABEL_COLOR.fire} />
+                <Bar dataKey="smoke" stackId="a" fill={LABEL_COLOR.smoke} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -92,7 +92,7 @@ export default function Dashboard() {
 
         <section className="card p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-white">Cameras</h2>
+            <h2 className="text-sm font-semibold text-heading">Cameras</h2>
             <Link to="/monitor" className="text-xs text-ember-400 hover:text-ember-500">Open monitor →</Link>
           </div>
           {cameras && cameras.length === 0 ? (
@@ -112,7 +112,7 @@ export default function Dashboard() {
 
       <section className="card mt-6 p-5">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Recent incidents</h2>
+          <h2 className="text-sm font-semibold text-heading">Recent incidents</h2>
           <Link to="/incidents" className="text-xs text-ember-400 hover:text-ember-500">View all →</Link>
         </div>
         {recent === null ? (

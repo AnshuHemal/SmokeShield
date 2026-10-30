@@ -3,6 +3,7 @@ import { Activity, AlertTriangle, Bell, BellOff, History, LayoutDashboard, Layou
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { PageTransition } from "./components/Motion";
+import { ThemeToggle, ThemeToggleCompact } from "./components/ThemeToggle";
 import { useToast } from "./components/Toast";
 import { useEvents } from "./hooks/useEvents";
 import { api, Health } from "./lib/api";
@@ -68,9 +69,10 @@ export default function App() {
             <ShieldAlert size={22} />
           </div>
           <div>
-            <div className="text-lg font-semibold leading-tight text-white">SmokeShield</div>
+            <div className="text-lg font-semibold leading-tight text-heading">SmokeShield</div>
             <div className="text-xs text-slate-500">See the flames before they spread</div>
           </div>
+          <div className="ml-auto md:hidden"><ThemeToggleCompact /></div>
         </div>
 
         <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:pb-0">
@@ -111,6 +113,7 @@ export default function App() {
           <button onClick={toggleSound} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-slate-400 hover:bg-ink-800 hover:text-slate-200">
             {sound ? <Bell size={15} /> : <BellOff size={15} />} Alarm sound {sound ? "on" : "off"}
           </button>
+          <ThemeToggle />
         </div>
       </aside>
 
