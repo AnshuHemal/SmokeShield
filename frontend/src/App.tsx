@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, AlertTriangle, Bell, BellOff, Cpu, History, LayoutDashboard, LayoutGrid, ScanSearch, ShieldAlert, Video } from "lucide-react";
+import { Activity, AlertTriangle, Bell, BellOff, Cpu, History, LayoutDashboard, LayoutGrid, ScanSearch, Video } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Logo } from "./components/Logo";
 import { PageTransition } from "./components/Motion";
 import { ThemeToggle, ThemeToggleCompact } from "./components/ThemeToggle";
 import { useToast } from "./components/Toast";
@@ -71,9 +72,7 @@ export default function App() {
     <div className="flex min-h-screen flex-col md:flex-row">
       <aside className="border-ink-700 bg-ink-900 md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:border-r">
         <div className="flex items-center gap-3 px-5 py-5">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-ember-500/15 text-ember-400">
-            <ShieldAlert size={22} />
-          </div>
+          <Logo size={40} />
           <div>
             <div className="text-lg font-semibold leading-tight text-heading">SmokeShield</div>
             <div className="text-xs text-slate-500">See the flames before they spread</div>
