@@ -1,0 +1,43 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# ---------- Node / frontend ----------
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+npm-debug.log*
+
+# ---------- Secrets & local config ----------
+.env
+.env.*
+!.env.example
+
+# ---------- ML artefacts ----------
+# datasets are several GB - download them separately (see README)
+backend/datasets/
+# training runs, plots, checkpoints
+backend/runs/
+# ignore all weights, but keep the final trained model so the app runs after cloning
+*.pt
+*.onnx
+!backend/models/best.pt
+
+# ---------- Runtime data (incident DB + snapshots) ----------
+backend/data/
+
+# ---------- Logs ----------
+*.log
+
+# ---------- OS / editor ----------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/

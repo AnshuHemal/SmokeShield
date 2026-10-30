@@ -1,0 +1,12 @@
+services:
+  smokeshield:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/models:/app/backend/models:ro   # put best.pt here
+      - smokeshield-data:/app/backend/data         # incident DB + snapshots
+    restart: unless-stopped
+
+volumes:
+  smokeshield-data:
