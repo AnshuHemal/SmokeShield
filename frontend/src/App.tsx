@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, AlertTriangle, Bell, BellOff, History, LayoutDashboard, LayoutGrid, ScanSearch, ShieldAlert, Video } from "lucide-react";
+import { Activity, AlertTriangle, Bell, BellOff, Cpu, History, LayoutDashboard, LayoutGrid, ScanSearch, ShieldAlert, Video } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { PageTransition } from "./components/Motion";
@@ -13,6 +13,7 @@ import Cameras from "./pages/Cameras";
 import Dashboard from "./pages/Dashboard";
 import Incidents from "./pages/Incidents";
 import LiveMonitor from "./pages/LiveMonitor";
+import Models from "./pages/Models";
 import Monitor from "./pages/Monitor";
 
 const NAV = [
@@ -20,6 +21,7 @@ const NAV = [
   { to: "/monitor", label: "Monitor", icon: LayoutGrid },
   { to: "/cameras", label: "Cameras", icon: Video },
   { to: "/incidents", label: "Incidents", icon: History },
+  { to: "/models", label: "Models", icon: Cpu },
   { to: "/live", label: "Browser Cam", icon: Activity },
   { to: "/analyze", label: "Analyze Media", icon: ScanSearch },
 ];
@@ -37,7 +39,11 @@ export default function App() {
     const poll = () => api.health().then((h) => { setHealth(h); setOffline(false); }).catch(() => setOffline(true));
     poll();
     const t = setInterval(poll, 10000);
-    return () => clearInterval(t);
+    window.addEventListener("smokeshield:model-changed", poll);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("smokeshield:model-changed", poll);
+    };
   }, []);
 
   // A confirmed hazard on any server-side camera pops a toast from anywhere in the app.
@@ -102,8 +108,11 @@ export default function App() {
               <span className={`h-2 w-2 rounded-full ${offline ? "bg-red-500" : health?.model_loaded ? "bg-emerald-400" : "bg-amber-400"}`} />
               {offline ? "API offline" : health?.model_loaded ? "Model ready" : "Model missing"}
             </div>
+            <div className="truncate text-slate-400" title={health?.model_name ?? undefined}>
+              {health?.model_loaded ? health.model_name ?? "Active model" : "Add or activate a model"}
+            </div>
             <div className="text-slate-500">
-              {health?.model_loaded ? `${health.classes.join(", ")} · ${health.device}` : "Add models/best.pt"}
+              {health?.model_loaded ? `${health.classes.join(", ")} · ${health.device}` : "See the Models page"}
             </div>
             <div className="flex items-center gap-2 pt-1 text-slate-500">
               <span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-slate-600"}`} />
@@ -120,7 +129,7 @@ export default function App() {
       <main className="min-w-0 flex-1 p-4 md:p-8">
         {offline && <Banner text="Cannot reach the backend. Start it with: uvicorn app.main:app --port 8000" />}
         {!offline && health && !health.model_loaded && (
-          <Banner text={`No YOLO weights at ${health.model_path}. Train one with backend/train.py and restart the API.`} />
+          <Banner text={`No model is live. Open Models to upload or activate one (weights are normally at ${health.model_path}).`} />
         )}
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
@@ -128,6 +137,7 @@ export default function App() {
             <Route path="/monitor" element={<PageTransition><Monitor /></PageTransition>} />
             <Route path="/cameras" element={<PageTransition><Cameras /></PageTransition>} />
             <Route path="/incidents" element={<PageTransition><Incidents /></PageTransition>} />
+            <Route path="/models" element={<PageTransition><Models /></PageTransition>} />
             <Route path="/live" element={<PageTransition><LiveMonitor ready={!!health?.model_loaded} /></PageTransition>} />
             <Route path="/analyze" element={<PageTransition><Analyze ready={!!health?.model_loaded} /></PageTransition>} />
           </Routes>

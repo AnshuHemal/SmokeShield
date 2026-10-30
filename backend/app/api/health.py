@@ -15,6 +15,8 @@ def health(request: Request, manager: CameraManager = Depends(get_manager)):
     return HealthOut(
         status="ok" if det.loaded else "model_missing",
         model_loaded=det.loaded,
+        model_name=getattr(det, "name", None),
+        model_version_id=getattr(det, "version_id", None),
         model_path=str(settings.model_file),
         classes=det.classes,
         device=det.device,

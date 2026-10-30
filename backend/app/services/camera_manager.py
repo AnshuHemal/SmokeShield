@@ -35,6 +35,13 @@ class CameraManager:
             for cam in db.scalars(select(Camera)):
                 self.apply(cam)
 
+    def refresh(self) -> None:
+        """Start workers for enabled cameras that are not running (e.g. a model was just loaded for the first time)."""
+        with SessionLocal() as db:
+            for cam in db.scalars(select(Camera)):
+                if cam.enabled and cam.id not in self._workers:
+                    self.apply(cam)
+
     def stop_all(self) -> None:
         with self._lock:
             workers = list(self._workers.values())

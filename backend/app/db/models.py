@@ -23,6 +23,33 @@ class Camera(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class ModelVersion(Base):
+    """One registered YOLO weights file. Exactly one row is active (the model serving detections)."""
+
+    __tablename__ = "model_versions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(80))
+    filename: Mapped[str] = mapped_column(String(128))
+    location: Mapped[str] = mapped_column(String(16))  # bundled (backend/models) | uploaded (data/models)
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # facts read from the weights when they were loaded
+    classes: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    params: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)  # median on this server
+    # accuracy as reported by the person who trained it (e.g. from the Colab validation table)
+    precision: Mapped[float | None] = mapped_column(Float, nullable=True)
+    recall: Mapped[float | None] = mapped_column(Float, nullable=True)
+    map50: Mapped[float | None] = mapped_column(Float, nullable=True)
+    map50_95: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # drives "roll back"
+
+
 class Incident(Base):
     __tablename__ = "incidents"
 

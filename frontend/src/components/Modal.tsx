@@ -64,20 +64,22 @@ export function Modal({ open, onClose, title, children, width = "max-w-2xl" }: M
 interface ConfirmProps {
   open: boolean;
   title: string;
-  message: string;
+  message: ReactNode;
   confirmLabel?: string;
+  /** "danger" (red, default) for deletes; "primary" (brand orange) for safe actions such as switching models */
+  tone?: "danger" | "primary";
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-export function ConfirmDialog({ open, title, message, confirmLabel = "Delete", onConfirm, onCancel }: ConfirmProps) {
+export function ConfirmDialog({ open, title, message, confirmLabel = "Delete", tone = "danger", onConfirm, onCancel }: ConfirmProps) {
   return (
     <Modal open={open} onClose={onCancel} title={title} width="max-w-md">
       <div className="p-6">
-        <p className="text-sm text-slate-400">{message}</p>
+        <div className="text-sm text-slate-400">{message}</div>
         <div className="mt-6 flex justify-end gap-3">
           <button onClick={onCancel} className="btn-ghost">Cancel</button>
-          <button onClick={onConfirm} className="btn bg-red-600 text-white hover:bg-red-700">{confirmLabel}</button>
+          <button onClick={onConfirm} className={tone === "danger" ? "btn bg-red-600 text-white hover:bg-red-700" : "btn-primary"}>{confirmLabel}</button>
         </div>
       </div>
     </Modal>

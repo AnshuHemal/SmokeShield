@@ -7,6 +7,7 @@ from ..config import settings
 from ..db.session import SessionLocal
 from ..services.camera_manager import CameraManager
 from ..services.detector import DetectorLike
+from ..services.model_manager import ModelManager
 
 
 def get_db() -> Iterator[Session]:
@@ -23,3 +24,7 @@ def get_detector(request: Request) -> DetectorLike:
 
 def get_manager(request: Request) -> CameraManager:
     return request.app.state.manager
+
+
+def get_models(request: Request) -> ModelManager:
+    return request.app.state.models

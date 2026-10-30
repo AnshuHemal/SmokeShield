@@ -21,11 +21,20 @@ class DetectorLike(Protocol):
     def predict(self, frame: np.ndarray, conf: float) -> list[Detection]: ...
 
 
-def _normalise_label(name: str) -> str | None:
-    n = name.lower()
-    if "fire" in n or "flame" in n:
+_FIRE_NAMES = {"fire", "flame", "flames", "wildfire"}
+_SMOKE_NAMES = {"smoke"}
+
+
+def normalise_label(name: str) -> str | None:
+    """Map a model's class name to our two hazards.
+
+    Exact names only: a substring test would treat COCO's "fire hydrant" as a fire and raise real alarms
+    for every hydrant in view.
+    """
+    n = name.strip().lower().replace("_", " ").replace("-", " ")
+    if n in _FIRE_NAMES:
         return "fire"
-    if "smoke" in n:
+    if n in _SMOKE_NAMES:
         return "smoke"
     return None
 
@@ -37,6 +46,7 @@ class YoloDetector:
         self.device = device or "auto"
         self.loaded = False
         self.classes: list[str] = []
+        self.params: int | None = None
         self._model = None
         # One model is shared by every camera worker and API request; Ultralytics models are not thread-safe.
         self._lock = threading.Lock()
@@ -49,6 +59,10 @@ class YoloDetector:
 
         self._model = YOLO(str(self.weights))
         self.classes = list(self._model.names.values())
+        try:
+            self.params = sum(p.numel() for p in self._model.model.parameters())
+        except Exception:  # noqa: BLE001 - informational only
+            self.params = None
         self.loaded = True
         self.predict(np.zeros((self.image_size, self.image_size, 3), np.uint8), 0.5)  # warm-up
         log.info("Loaded %s (classes: %s)", self.weights.name, self.classes)
@@ -64,7 +78,7 @@ class YoloDetector:
             result = self._model.predict(frame, **kwargs)[0]
         out: list[Detection] = []
         for box in result.boxes:
-            label = _normalise_label(self._model.names[int(box.cls)])
+            label = normalise_label(self._model.names[int(box.cls)])
             if label is None:
                 continue
             x1, y1, x2, y2 = box.xyxy[0].tolist()

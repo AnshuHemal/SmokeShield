@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     max_upload_mb: int = 100
     max_video_frames: int = 300
 
+    # model registry
+    model_upload_enabled: bool = True  # .pt files can run code when loaded: switch off on shared hosts
+    max_model_mb: int = 200
+    max_model_versions: int = 20
+
     # storage / web
     data_dir: str = "data"
     cors_origins: list[str] = ["http://localhost:5173"]
@@ -42,6 +47,15 @@ class Settings(BaseSettings):
         d = (base if base.is_absolute() else BASE_DIR / base).joinpath(*parts)
         d.mkdir(parents=True, exist_ok=True)
         return d
+
+    @property
+    def bundled_models_dir(self) -> Path:
+        """Folder next to the configured weights file (backend/models by default)."""
+        return self.model_file.parent
+
+    @property
+    def uploaded_models_dir(self) -> Path:
+        return self._dir("models")
 
     @property
     def data_path(self) -> Path:

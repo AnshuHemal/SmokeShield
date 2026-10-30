@@ -12,6 +12,8 @@ export interface Detection {
 export interface Health {
   status: "ok" | "model_missing";
   model_loaded: boolean;
+  model_name: string | null;
+  model_version_id: number | null;
   model_path: string;
   classes: string[];
   device: string;
@@ -106,6 +108,37 @@ export interface Stats {
   cameras_online: number;
 }
 
+export interface ModelVersion {
+  id: number;
+  name: string;
+  filename: string;
+  location: "bundled" | "uploaded";
+  size_mb: number;
+  notes: string | null;
+  classes: string[] | null;
+  params_m: number | null;
+  latency_ms: number | null;
+  precision: number | null;
+  recall: number | null;
+  map50: number | null;
+  map50_95: number | null;
+  is_active: boolean;
+  file_exists: boolean;
+  created_at: string;
+  activated_at: string | null;
+  deactivated_at: string | null;
+}
+
+/** Fields a person can edit or supply on upload. Metrics are fractions (0..1); null clears one. */
+export interface ModelMeta {
+  name?: string;
+  notes?: string | null;
+  precision?: number | null;
+  recall?: number | null;
+  map50?: number | null;
+  map50_95?: number | null;
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) throw new Error(await errorMessage(res));
@@ -194,6 +227,41 @@ export const api = {
   detectVideo: (file: File, conf: number) => upload<VideoResult>("/api/detect/video", file, conf),
   streamUrl: (conf: number) => wsUrl(`/ws/stream?conf=${conf}`),
   eventsUrl: () => wsUrl("/ws/events"),
+
+  // model registry
+  models: () => request<ModelVersion[]>("/api/models"),
+  updateModel: (id: number, meta: ModelMeta) => request<ModelVersion>(`/api/models/${id}`, json("PATCH", meta)),
+  activateModel: (id: number) => request<ModelVersion>(`/api/models/${id}/activate`, { method: "POST" }),
+  rollbackModel: () => request<ModelVersion>("/api/models/rollback", { method: "POST" }),
+  benchmarkModel: (id: number) => request<ModelVersion>(`/api/models/${id}/benchmark`, { method: "POST" }),
+  deleteModel: (id: number) => request<void>(`/api/models/${id}`, { method: "DELETE" }),
+  /**
+   * XHR so the UI can show upload progress. `onProcessing` fires when the last byte is sent: the server
+   * then loads and times the weights, which takes a few seconds, so the UI can say so.
+   */
+  uploadModel(file: File, meta: ModelMeta & { name: string }, hooks: { onProgress: (pct: number) => void; onProcessing: () => void }): Promise<ModelVersion> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/models");
+      xhr.upload.onprogress = (e) => e.lengthComputable && hooks.onProgress(Math.round((e.loaded / e.total) * 100));
+      xhr.upload.onload = hooks.onProcessing;
+      xhr.onload = () => {
+        let body: { detail?: unknown } = {};
+        try {
+          body = JSON.parse(xhr.responseText);
+        } catch {
+          /* non-JSON error page */
+        }
+        if (xhr.status >= 200 && xhr.status < 300) return resolve(body as unknown as ModelVersion);
+        reject(new Error(typeof body.detail === "string" ? body.detail : `Upload failed (${xhr.status})`));
+      };
+      xhr.onerror = () => reject(new Error("Network error during upload"));
+      const form = new FormData();
+      form.append("file", file);
+      Object.entries(meta).forEach(([k, v]) => v !== undefined && v !== null && v !== "" && form.append(k, String(v)));
+      xhr.send(form);
+    });
+  },
 };
 
 function wsUrl(path: string) {
