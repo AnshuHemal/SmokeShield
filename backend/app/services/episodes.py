@@ -99,11 +99,13 @@ class EpisodeRecorder:
         best = max(d.confidence for d in seen)
         try:
             if best > ep.peak + self.PEAK_MARGIN and now - ep.last_snapshot >= self.SNAPSHOT_EVERY:
-                improve_incident(ep.incident_id, frame, seen, utcnow())
+                if not improve_incident(ep.incident_id, frame, seen, utcnow()):
+                    return self._forget(label, ep)
                 ep.peak, ep.last_snapshot, ep.last_write = best, now, now
                 self._emit("incident_update", ep.incident_id, label, ep.peak)
             elif force or now - ep.last_write >= self.TOUCH_EVERY:
-                touch_incident(ep.incident_id, utcnow())
+                if not touch_incident(ep.incident_id, utcnow()):
+                    return self._forget(label, ep)
                 ep.last_write = now
                 self._emit("incident_update", ep.incident_id, label, ep.peak)
         except Exception:  # noqa: BLE001
@@ -115,10 +117,16 @@ class EpisodeRecorder:
             return
         ep.open = False  # kept in memory so a quick return merges into this incident
         try:
-            touch_incident(ep.incident_id, utcnow())
+            if not touch_incident(ep.incident_id, utcnow()):
+                return self._forget(label, ep)
             self._emit("incident_update", ep.incident_id, label, ep.peak)
         except Exception:  # noqa: BLE001
             log.exception("could not close incident #%s", ep.incident_id)
+
+    def _forget(self, label: str, ep: _Episode) -> None:
+        """The incident was deleted while the hazard was still on screen: drop it so the next sighting is recorded afresh."""
+        log.info("incident #%s was deleted; a continuing %s will be recorded as a new incident", ep.incident_id, label)
+        self._episodes.pop(label, None)
 
     def _emit(self, kind: str, incident_id: int, label: str, confidence: float, **extra) -> None:
         if self._publish:

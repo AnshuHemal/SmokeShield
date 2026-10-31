@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from ..db.models import Incident
 from ..db.session import utcnow
-from ..schemas.incident import IncidentOut, ReviewIn
-from ..services.incidents import build_training_zip, delete_files, to_out
+from ..schemas.incident import BulkDeleteIn, BulkDeleteOut, IncidentOut, ReviewIn
+from ..services.incidents import build_training_zip, delete_incidents, to_out
 from .deps import get_db
 
 router = APIRouter(prefix="/api/incidents", tags=["incidents"])
@@ -62,9 +62,13 @@ def review_incident(incident_id: int, body: ReviewIn, db: Session = Depends(get_
     return to_out(inc)
 
 
+@router.post("/bulk-delete", response_model=BulkDeleteOut)
+def delete_many(body: BulkDeleteIn, db: Session = Depends(get_db)):
+    """Delete several incidents at once. Ids that no longer exist are skipped, so a retry or a stale list is harmless."""
+    rows = list(db.scalars(select(Incident).where(Incident.id.in_(set(body.ids)))))
+    return BulkDeleteOut(deleted=delete_incidents(db, rows))
+
+
 @router.delete("/{incident_id}", status_code=204)
 def delete_incident(incident_id: int, db: Session = Depends(get_db)):
-    inc = _get(db, incident_id)
-    delete_files(inc)
-    db.delete(inc)
-    db.commit()
+    delete_incidents(db, [_get(db, incident_id)])

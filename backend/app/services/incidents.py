@@ -1,9 +1,11 @@
 import io
+import logging
 import uuid
 import zipfile
 from datetime import datetime
 
 import numpy as np
+from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db.models import Incident
@@ -11,6 +13,8 @@ from ..db.session import SessionLocal, utcnow
 from ..schemas.detection import Detection
 from ..schemas.incident import IncidentOut
 from .imaging import annotate, encode_jpeg
+
+log = logging.getLogger("smokeshield.incidents")
 
 CLASS_IDS = {"smoke": 0, "fire": 1}  # same order as the D-Fire training data
 
@@ -46,24 +50,26 @@ def log_incident(
         return inc
 
 
-def touch_incident(incident_id: int, seen_at: datetime | None = None) -> None:
-    """Extend an ongoing incident: the hazard was seen again."""
+def touch_incident(incident_id: int, seen_at: datetime | None = None) -> bool:
+    """Extend an ongoing incident: the hazard was seen again. False means it no longer exists (a person deleted it)."""
     with SessionLocal() as db:
         inc = db.get(Incident, incident_id)
-        if inc:
-            inc.ended_at = seen_at or utcnow()
-            db.commit()
+        if not inc:
+            return False
+        inc.ended_at = seen_at or utcnow()
+        db.commit()
+        return True
 
 
-def improve_incident(incident_id: int, frame: np.ndarray, detections: list[Detection], seen_at: datetime | None = None) -> None:
-    """Replace the incident's pictures with a better (more confident) frame from the same episode."""
+def improve_incident(incident_id: int, frame: np.ndarray, detections: list[Detection], seen_at: datetime | None = None) -> bool:
+    """Replace the incident's pictures with a better (more confident) frame from the same episode. False = it was deleted."""
     if not detections:
-        return
+        return True
     top = max(detections, key=lambda d: d.confidence)
     with SessionLocal() as db:
         inc = db.get(Incident, incident_id)
         if not inc:
-            return
+            return False
         if inc.snapshot:
             (settings.snapshot_dir / inc.snapshot).write_bytes(encode_jpeg(annotate(frame, detections)))
         if inc.raw_snapshot:
@@ -72,12 +78,26 @@ def improve_incident(incident_id: int, frame: np.ndarray, detections: list[Detec
         inc.detections = [d.model_dump() for d in detections]
         inc.ended_at = seen_at or utcnow()
         db.commit()
+        return True
 
 
 def delete_files(inc: Incident) -> None:
     for name in (inc.snapshot, inc.raw_snapshot):
         if name:
-            (settings.snapshot_dir / name).unlink(missing_ok=True)
+            try:
+                (settings.snapshot_dir / name).unlink(missing_ok=True)
+            except OSError:  # e.g. still open on Windows; the record is gone, so an orphaned jpg is the lesser harm
+                log.warning("could not remove snapshot %s", name)
+
+
+def delete_incidents(db: Session, incidents: list[Incident]) -> int:
+    """Remove incidents and their pictures. Rows go first and are committed, so a failure never leaves a record without images."""
+    for inc in incidents:
+        db.delete(inc)
+    db.commit()
+    for inc in incidents:
+        delete_files(inc)
+    return len(incidents)
 
 
 def to_out(inc: Incident) -> IncidentOut:

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Camera as CameraIcon, Download, GraduationCap, History, Loader2, Trash2 } from "lucide-react";
+import { Camera as CameraIcon, Check, CheckSquare, Download, GraduationCap, History, Loader2, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ConfirmDialog, Modal } from "../components/Modal";
@@ -30,6 +30,9 @@ export default function Incidents() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [open, setOpen] = useState<Incident | null>(null);
   const [deleting, setDeleting] = useState<Incident | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   const query = useCallback((offset = 0): IncidentQuery => ({ limit: PAGE, offset, label, status, camera_id: cameraId }), [label, status, cameraId]);
 
@@ -99,9 +102,35 @@ export default function Incidents() {
     try {
       await api.deleteIncident(inc.id);
       setItems((x) => x?.filter((i) => i.id !== inc.id) ?? x);
+      setSelected((s) => { const n = new Set(s); n.delete(inc.id); return n; });
       loadStats();
+      toast({ tone: "success", title: `Incident #${inc.id} deleted` });
     } catch (e) {
       toast({ tone: "error", title: "Could not delete incident", description: e instanceof Error ? e.message : undefined });
+    }
+  };
+
+  const toggle = (id: number) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const stopSelecting = () => { setSelecting(false); setSelected(new Set()); };
+
+  // A refresh or another tab may have removed incidents already; never keep ids that are no longer on screen.
+  useEffect(() => {
+    if (!items) return;
+    const ids = new Set(items.map((i) => i.id));
+    setSelected((s) => (s.size && [...s].some((id) => !ids.has(id)) ? new Set([...s].filter((id) => ids.has(id))) : s));
+  }, [items]);
+
+  const removeSelected = async () => {
+    const ids = [...selected];
+    setConfirmBulk(false);
+    try {
+      const { deleted } = await api.deleteIncidents(ids);
+      setItems((x) => x?.filter((i) => !selected.has(i.id)) ?? x);
+      stopSelecting();
+      loadStats();
+      toast({ tone: "success", title: `${deleted} ${deleted === 1 ? "incident" : "incidents"} deleted` });
+    } catch (e) {
+      toast({ tone: "error", title: "Could not delete the selection", description: e instanceof Error ? e.message : undefined });
     }
   };
 
@@ -126,6 +155,14 @@ export default function Incidents() {
         subtitle="Review each detection - your feedback measures accuracy and trains the next model."
         action={
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+              disabled={!items?.length}
+              aria-pressed={selecting}
+              className={`btn-ghost ${selecting ? "!border-ember-500 !text-ember-400" : ""}`}
+            >
+              <CheckSquare size={16} /> {selecting ? "Done" : "Select"}
+            </button>
             <button onClick={exportCsv} disabled={!items?.length} className="btn-ghost"><Download size={16} /> CSV</button>
             <a
               href={reviewed ? api.trainingExportUrl : undefined}
@@ -183,12 +220,22 @@ export default function Incidents() {
                 layout
                 variants={staggerItem}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="card overflow-hidden"
+                className={`card overflow-hidden transition-shadow ${selected.has(i.id) ? "ring-2 ring-ember-500" : ""}`}
               >
-                <button onClick={() => setOpen(i)} className="group relative block aspect-video w-full bg-black on-media" aria-label={`Open incident ${i.id}`}>
+                <button
+                  onClick={() => (selecting ? toggle(i.id) : setOpen(i))}
+                  className="group relative block aspect-video w-full bg-black on-media"
+                  aria-label={selecting ? `${selected.has(i.id) ? "Deselect" : "Select"} incident ${i.id}` : `Open incident ${i.id}`}
+                  aria-pressed={selecting ? selected.has(i.id) : undefined}
+                >
                   {i.snapshot_url && <img src={i.snapshot_url} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />}
                   <div className="absolute left-3 top-3"><LabelBadge label={i.label} /></div>
                   <div className="absolute right-3 top-3 rounded-md bg-black/60 px-2 py-0.5 text-xs font-semibold tabular-nums text-white backdrop-blur">{Math.round(i.confidence * 100)}%</div>
+                  {selecting && (
+                    <div className={`absolute bottom-3 left-3 flex h-6 w-6 items-center justify-center rounded-md border-2 ${selected.has(i.id) ? "border-ember-500 bg-ember-500 text-white" : "border-white/80 bg-black/50 text-transparent"}`}>
+                      <Check size={16} strokeWidth={3} />
+                    </div>
+                  )}
                 </button>
                 <div className="space-y-3 p-4">
                   <div className="flex items-start justify-between gap-2">
@@ -199,7 +246,18 @@ export default function Incidents() {
                         <Duration incident={i} />
                       </div>
                     </div>
-                    <ReviewBadge status={i.status} />
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <ReviewBadge status={i.status} />
+                      <button
+                        onClick={() => setDeleting(i)}
+                        disabled={selecting}
+                        title="Delete incident"
+                        aria-label={`Delete incident ${i.id}`}
+                        className="rounded-md p-1.5 text-slate-500 transition hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                   <ReviewButtons status={i.status} onChange={(s) => review(i, s)} />
                 </div>
@@ -217,7 +275,44 @@ export default function Incidents() {
         </div>
       )}
 
+      <AnimatePresence>
+        {selecting && (
+          <motion.div
+            role="toolbar"
+            aria-label="Selection actions"
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            className="card fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 p-3 pl-5 shadow-2xl shadow-black/40"
+          >
+            <span className="text-sm text-slate-300" aria-live="polite">
+              <b className="tabular-nums text-heading">{selected.size}</b> selected
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="btn-ghost"
+                onClick={() => setSelected(selected.size === items?.length ? new Set() : new Set((items ?? []).map((i) => i.id)))}
+              >
+                {selected.size === items?.length ? "Clear" : `Select all${more ? " loaded" : ""}`}
+              </button>
+              <button className="btn bg-red-600 text-white hover:bg-red-700" disabled={!selected.size} onClick={() => setConfirmBulk(true)}>
+                <Trash2 size={16} /> Delete
+              </button>
+              <button className="btn-ghost" onClick={stopSelecting} aria-label="Cancel selection"><X size={16} /></button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <Detail incident={open} onClose={() => setOpen(null)} onReview={review} onDelete={setDeleting} />
+      <ConfirmDialog
+        open={confirmBulk}
+        title={`Delete ${selected.size} ${selected.size === 1 ? "incident" : "incidents"}?`}
+        message="They and their snapshots are permanently removed, and they will no longer count toward the accuracy score or retraining data."
+        confirmLabel={`Delete ${selected.size}`}
+        onConfirm={removeSelected}
+        onCancel={() => setConfirmBulk(false)}
+      />
       <ConfirmDialog
         open={!!deleting}
         title="Delete incident?"

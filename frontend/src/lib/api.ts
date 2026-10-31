@@ -189,6 +189,7 @@ export const api = {
   reviewIncident: (id: number, status: ReviewStatus) =>
     request<Incident>(`/api/incidents/${id}/review`, json("PATCH", { status })),
   deleteIncident: (id: number) => request<void>(`/api/incidents/${id}`, { method: "DELETE" }),
+  deleteIncidents: (ids: number[]) => request<{ deleted: number }>("/api/incidents/bulk-delete", json("POST", { ids })),
   trainingExportUrl: "/api/incidents/export/training",
 
   // cameras

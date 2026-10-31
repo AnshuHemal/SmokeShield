@@ -9,10 +9,19 @@ interface ModalProps {
   children: ReactNode;
   /** Tailwind max-width class for the panel */
   width?: string;
+  /**
+   * Default: the content scrolls inside the panel. Pass false when the content is a flex column that owns its own
+   * scroll area (a form with a pinned footer); it then receives a bounded height to fill.
+   */
+  scroll?: boolean;
 }
 
-/** Accessible dialog: Esc and backdrop click close it, body scroll is locked while open. */
-export function Modal({ open, onClose, title, children, width = "max-w-2xl" }: ModalProps) {
+/**
+ * Accessible dialog: Esc and backdrop click close it, body scroll is locked while open.
+ * The panel never grows past the viewport: the title bar stays put and only the content scrolls, so on a short
+ * screen nothing (title, close button, first field) is pushed out of reach above the top edge.
+ */
+export function Modal({ open, onClose, title, children, width = "max-w-2xl", scroll = true }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -29,7 +38,7 @@ export function Modal({ open, onClose, title, children, width = "max-w-2xl" }: M
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -39,21 +48,21 @@ export function Modal({ open, onClose, title, children, width = "max-w-2xl" }: M
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className={`card w-full ${width} my-6 shadow-2xl shadow-black/50`}
+            className={`card flex max-h-full w-full ${width} flex-col shadow-2xl shadow-black/50`}
             initial={{ opacity: 0, y: 24, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 380, damping: 32 }}
           >
             {title && (
-              <div className="flex items-center justify-between border-b border-ink-700 px-6 py-4">
+              <div className="flex shrink-0 items-center justify-between border-b border-ink-700 px-6 py-4">
                 <h2 className="text-lg font-semibold text-heading">{title}</h2>
                 <button onClick={onClose} aria-label="Close" className="rounded-md p-1.5 text-slate-500 hover:bg-ink-700 hover:text-slate-200">
                   <X size={18} />
                 </button>
               </div>
             )}
-            {children}
+            {scroll ? <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div> : children}
           </motion.div>
         </motion.div>
       )}

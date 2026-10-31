@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .detection import Detection, Label
 from .system import UtcDatetime
@@ -35,6 +35,14 @@ class IncidentOut(BaseModel):
 
 class ReviewIn(BaseModel):
     status: ReviewStatus
+
+
+class BulkDeleteIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=500)
+
+
+class BulkDeleteOut(BaseModel):
+    deleted: int
 
 
 class HourBucket(BaseModel):

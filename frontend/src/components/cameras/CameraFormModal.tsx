@@ -58,7 +58,7 @@ interface Props {
 
 export function CameraFormModal({ open, camera, onClose, onSaved }: Props) {
   return (
-    <Modal open={open} onClose={onClose} title={camera ? `Edit ${camera.name}` : "Add camera"} width="max-w-3xl">
+    <Modal open={open} onClose={onClose} title={camera ? `Edit ${camera.name}` : "Add camera"} width="max-w-3xl" scroll={false}>
       {/* remount on open so every session starts from a clean form */}
       {open && <Form key={camera?.id ?? "new"} camera={camera} onClose={onClose} onSaved={onSaved} />}
     </Modal>
@@ -143,7 +143,9 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
   };
 
   return (
-    <form onSubmit={submit} className="space-y-7 p-6">
+    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+     {/* only this body scrolls; the title bar above and the actions below stay in view on short screens */}
+     <div className="min-h-0 flex-1 space-y-7 overflow-y-auto overscroll-contain p-6">
       {/* ---- basics ---- */}
       <section className="space-y-4">
         <Field label="Camera name">
@@ -208,7 +210,7 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
           <p className="text-xs text-slate-500">Tune per camera - a kitchen and a warehouse should not share one threshold.</p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3">
           {PRESETS.map((p) => (
             <button
               key={p.name}
@@ -292,19 +294,22 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
         <Switch checked={f.enabled} onChange={(v) => set("enabled", v)} label="Enable camera" />
       </div>
 
-      <AnimatePresence>
-        {error && (
-          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
-            {error}
-          </motion.div>
-        )}
-      </AnimatePresence>
+     </div>
 
-      <div className="flex justify-end gap-3 border-t border-ink-700 pt-5">
-        <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
-        <button type="submit" disabled={saving || (upload ? !upload.done : false)} className="btn-primary">
-          {saving && <Loader2 size={16} className="animate-spin" />} {camera ? "Save changes" : "Add camera"}
-        </button>
+      <div className="shrink-0 space-y-3 border-t border-ink-700 px-6 py-4">
+        <AnimatePresence>
+          {error && (
+            <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+              {error}
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
+          <button type="submit" disabled={saving || (upload ? !upload.done : false)} className="btn-primary">
+            {saving && <Loader2 size={16} className="animate-spin" />} {camera ? "Save changes" : "Add camera"}
+          </button>
+        </div>
       </div>
     </form>
   );
