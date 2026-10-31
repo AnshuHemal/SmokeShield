@@ -24,12 +24,17 @@ class FakeDetector:
     device = "cpu"
     params = 1_000_000
 
-    def __init__(self, label: str = "fire", classes: list[str] | None = None) -> None:
+    def __init__(self, label: str = "fire", classes: list[str] | None = None, confidence: float = 0.6) -> None:
         self.label = label
+        self.confidence = confidence  # 0.6 is below the instant-confirm level, so the N-of-M path is exercised
         self.classes = classes if classes is not None else ["smoke", "fire"]
+        self.seen_imgsz: set[int | None] = set()
 
-    def predict(self, frame, conf):
-        return [Detection(label=self.label, confidence=0.9, box=(0.1, 0.1, 0.6, 0.6))]  # type: ignore[arg-type]
+    def predict(self, frame, conf, imgsz=None):
+        self.seen_imgsz.add(imgsz)
+        if self.confidence < conf:  # honour the threshold, like the real model
+            return []
+        return [Detection(label=self.label, confidence=self.confidence, box=(0.1, 0.1, 0.6, 0.6))]  # type: ignore[arg-type]
 
 
 class MissingModel(FakeDetector):
@@ -39,7 +44,7 @@ class MissingModel(FakeDetector):
         super().__init__()
         self.classes = []
 
-    def predict(self, frame, conf):  # pragma: no cover
+    def predict(self, frame, conf, imgsz=None):  # pragma: no cover
         raise AssertionError("should not be called")
 
 

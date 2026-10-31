@@ -18,7 +18,8 @@ class Camera(Base):
     confidence: Mapped[float] = mapped_column(Float, default=0.40)
     confirm_frames: Mapped[int] = mapped_column(Integer, default=3)
     confirm_window: Mapped[int] = mapped_column(Integer, default=5)
-    cooldown: Mapped[int] = mapped_column(Integer, default=30)
+    cooldown: Mapped[int] = mapped_column(Integer, default=30)  # merge window: detections this close share one incident
+    imgsz: Mapped[int | None] = mapped_column(Integer, nullable=True)  # inference size; None = the model's default
     zone: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [[x, y], ...] normalised polygon
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -63,5 +64,6 @@ class Incident(Base):
     detections: Mapped[list | None] = mapped_column(JSON, nullable=True)
     camera_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     camera_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # last time this episode was seen
     status: Mapped[str] = mapped_column(String(16), default="new")  # new | real | false_alarm
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

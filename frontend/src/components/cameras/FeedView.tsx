@@ -43,7 +43,8 @@ function Body({ camera, state, onEdit, onClose }: { camera: Camera; state?: Came
           <Row k="Inference" v={state && isLive(status) ? `${state.latency_ms} ms` : "–"} />
           <Row k="Confidence" v={`${Math.round(camera.confidence * 100)}%`} />
           <Row k="Confirmation" v={`${camera.confirm_frames} of ${camera.confirm_window} frames`} />
-          <Row k="Cooldown" v={`${camera.cooldown}s`} />
+          <Row k="Detail" v={camera.imgsz ? `${camera.imgsz} px` : "Standard (640 px)"} />
+          <Row k="Merge window" v={`${camera.cooldown}s`} />
           <Row k="Zone" v={camera.zone ? `${camera.zone.length} points` : "Full frame"} />
         </dl>
 
@@ -52,7 +53,7 @@ function Body({ camera, state, onEdit, onClose }: { camera: Camera; state?: Came
           {state?.detections.length ? (
             state.detections.map((d, i) => (
               <div key={i} className="flex justify-between">
-                <span className="capitalize" style={{ color: LABEL_COLOR[d.label] }}>{d.label}</span>
+                <span className="capitalize" style={{ color: LABEL_COLOR[d.label] }}>{d.label}{d.held ? " (last seen)" : ""}</span>
                 <span className="tabular-nums">{Math.round(d.confidence * 100)}%</span>
               </div>
             ))
@@ -60,6 +61,18 @@ function Body({ camera, state, onEdit, onClose }: { camera: Camera; state?: Came
             <div className="text-slate-500">All clear</div>
           )}
         </div>
+
+        {!!state?.pending?.length && (
+          <div>
+            <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">Verifying</div>
+            {state.pending.map((d, i) => (
+              <div key={i} className="flex justify-between text-amber-300">
+                <span className="capitalize">Possible {d.label}</span>
+                <span className="tabular-nums">{Math.round(d.confidence * 100)}%</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {status === "offline" && state?.error && <p className="rounded-lg bg-ink-800 p-3 text-xs text-slate-400">{state.error}</p>}
 

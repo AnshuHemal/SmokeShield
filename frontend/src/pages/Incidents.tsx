@@ -10,7 +10,7 @@ import { useToast } from "../components/Toast";
 import { Chip, Empty, LabelBadge, PageHeader, ReviewBadge } from "../components/ui";
 import { useCameras } from "../hooks/useCameras";
 import { useEvents } from "../hooks/useEvents";
-import { api, Incident, IncidentQuery, Label, ReviewStatus, Stats, timeAgo } from "../lib/api";
+import { api, formatDuration, Incident, IncidentQuery, isOngoing, Label, ReviewStatus, Stats, timeAgo } from "../lib/api";
 
 const PAGE = 48;
 
@@ -49,6 +49,13 @@ export default function Incidents() {
   useEffect(() => { setItems(null); load(); }, [load]);
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => onIncident(() => { load(); loadStats(); }), [onIncident, load, loadStats]);
+
+  // New and extended incidents arrive as events; this slow poll is the safety net, and it also moves "Ongoing" to "Lasted".
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => { load(); setTick((n) => n + 1); }, 10000);
+    return () => clearInterval(t);
+  }, [load]);
 
   const setFilter = (key: string, value?: string) => {
     const next = new URLSearchParams(params);
@@ -187,7 +194,10 @@ export default function Incidents() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium text-heading">{i.camera_name ?? `${i.source[0].toUpperCase()}${i.source.slice(1)} upload`}</div>
-                      <div className="text-xs text-slate-500" title={new Date(i.created_at).toLocaleString()}>{timeAgo(i.created_at)}</div>
+                      <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate-500" title={new Date(i.created_at).toLocaleString()}>
+                        <span>{timeAgo(i.created_at)}</span>
+                        <Duration incident={i} />
+                      </div>
                     </div>
                     <ReviewBadge status={i.status} />
                   </div>
@@ -217,6 +227,18 @@ export default function Incidents() {
       />
     </>
   );
+}
+
+function Duration({ incident }: { incident: Incident }) {
+  if (isOngoing(incident)) {
+    return (
+      <span className="inline-flex items-center gap-1.5 font-medium text-red-300">
+        <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" /><span className="relative h-2 w-2 rounded-full bg-red-500" /></span>
+        Ongoing
+      </span>
+    );
+  }
+  return incident.duration_s != null && incident.duration_s >= 1 ? <span>· lasted {formatDuration(incident.duration_s)}</span> : null;
 }
 
 function AccuracyBar({ stats }: { stats: Stats }) {
@@ -257,6 +279,7 @@ function Detail({ incident, onClose, onReview, onDelete }: { incident: Incident 
               <Row k="Camera" v={incident.camera_name ?? "–"} />
               <Row k="Source" v={incident.source} />
               <Row k="Detected" v={new Date(incident.created_at).toLocaleString()} />
+              <Row k="Duration" v={isOngoing(incident) ? "Ongoing" : formatDuration(incident.duration_s ?? 0)} />
               <Row k="Objects" v={String(incident.detections.length || 1)} />
             </dl>
             <div>

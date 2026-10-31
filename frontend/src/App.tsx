@@ -50,12 +50,13 @@ export default function App() {
   // A confirmed hazard on any server-side camera pops a toast from anywhere in the app.
   useEffect(
     () =>
-      onIncident(({ incident }) => {
+      onIncident(({ type, incident }) => {
+        if (type !== "incident") return; // updates refresh the lists, they must not toast again
         toast({
           tone: "alert",
           title: `${incident.label === "fire" ? "🔥 Fire" : "💨 Smoke"} confirmed - ${incident.camera_name}`,
           description: `${Math.round(incident.confidence * 100)}% confidence`,
-          action: { label: "Review", onClick: () => navigate(`/incidents?camera=${incident.camera_id}`) },
+          action: { label: "Review", onClick: () => navigate(incident.camera_id != null ? `/incidents?camera=${incident.camera_id}` : "/incidents") },
         });
         if (soundEnabled()) beep();
       }),

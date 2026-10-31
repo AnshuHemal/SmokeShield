@@ -10,9 +10,10 @@ Real-time fire and smoke detection platform: a **FastAPI + Ultralytics YOLO** ba
 - **Real-time toasts and alarm sound** from anywhere in the app when a hazard is confirmed
 
 **Fewer false alarms**
-- **Temporal confirmation** – an alarm needs the hazard in *N of the last M frames* (default 3 of 5); one-frame glitches never trigger
-- **Per-camera sensitivity** – confidence, confirmation window, cooldown, with *Sensitive / Balanced / Strict* presets
+- **Stable alarms** – an alarm needs the hazard in *N of the last M frames* (default 3 of 5), so one-frame glitches never trigger; one very confident detection (75%+) confirms at once; and once on, the alarm and its last box stay for a few seconds after the last sighting, so a flickering flame does not blink on and off. Boxes seen but not yet confirmed show as an amber "Possible fire"
+- **Per-camera sensitivity** – confidence, confirmation window, detail level, merge window, with *Sensitive / Balanced / Strict / Close-range* presets
 - **Detection zones** – draw a polygon on a live preview; detections outside it are ignored
+- **Incidents never get dropped** – a continuous or flickering hazard is ONE incident whose duration keeps growing; if it returns within the merge window it extends the same incident; a better frame replaces the snapshot; a failed write is retried on the next frame
 - **Incident review** – mark each incident *Real* or *False alarm*; the dashboard shows the false-alarm rate, and reviewed incidents export as a **YOLO training set** (real = boxes, false alarm = negative example) for retraining
 
 **Model management**
@@ -26,7 +27,7 @@ Real-time fire and smoke detection platform: a **FastAPI + Ultralytics YOLO** ba
 - **Browser Cam** – quick webcam test from the browser over WebSocket
 - **Dashboard** – animated metrics, 24-hour chart (in local time), camera health, recent incidents
 - **Light / Dark / System theme** – follows the OS live, remembers your choice, no flash on load, WCAG AA contrast in both themes
-- Light-weight SQLite database with automatic in-place migration, model health reporting, 56 automated tests
+- Light-weight SQLite database with automatic in-place migration, model health reporting, 79 automated tests
 
 ## Architecture
 ```
@@ -156,20 +157,35 @@ Figures: [training curves](docs/model/results.png) · [confusion matrix](docs/mo
 | Balanced | 40% | 3 of 5 frames | offices, warehouses |
 | Strict | 55% | 4 of 6 frames | outdoors, steam / dust / headlights |
 
-At the default 4 inferences per second, "3 of 5" confirms a real fire in about 0.75 s. Change the rate with `SMOKESHIELD_WORKER_FPS`.
+At the default 4 inferences per second, "3 of 5" confirms a real fire in about 0.75 s at full speed (a single detection of 75%+ confirms immediately). Change the rate with `SMOKESHIELD_WORKER_FPS`.
+
+### Small flames: lighters, matches, candles
+The model was trained on D-Fire, mostly surveillance-style fires. Half of its training flames fill **under 0.5% of the frame**, and a lighter flame is in that range, so it is the hardest case. Measured on held-out images with the live model:
+
+| What was measured | Result |
+|---|---|
+| Real tiny flames (<0.5% of the frame), found per frame | 45% at confidence 0.40, 65% at 0.25, 82% at 0.10 |
+| A 0.5% flame on a 1280x720 webcam, model at 640 / 960 / 1280 px | found 19% / 31% / 49% of frames at 0.40 |
+| The same flame through the old Browser Cam (frames shrunk to 640 px wide) | 12% |
+| Empty scenes that trigger a fire box at confidence 0.40 / 0.25 / 0.15 | 0% / 0% / 1.7% (60 scenes, a small sample) |
+| Inference time per frame at 640 / 960 / 1280 px (Intel i5-9500, CPU) | 198 ms / 394 ms / 704 ms |
+
+What the app does about it: the **Detail level** setting gives the model more pixels (slower), the **Close-range** preset (confidence 0.25, 2 of 4 frames, 960 px) accepts weaker, rarer sightings, server webcams are opened at 1280x720, and the **Live Monitor** page shows weak detections below your threshold so you can see what the model half-sees. The Close-range thresholds come from the numbers above, not from tests on real lighters; tune them with the Live Monitor page.
+
+**The lasting fix is data.** The model has never seen a lighter or match flame. Collect clips of your own scenes, label them, and fine-tune (see the Colab steps used for the first retraining).
 
 ## Tests
 ```bash
 cd backend && pytest
 ```
-56 tests cover confirmation logic, zones, camera CRUD and validation, a video-file camera end to end (upload → worker → confirmed fire → incident), review and export, migration of old databases, and the model registry (upload rules, hot swap, rollback, failed activation keeping the current model, exact class matching, cache headers). They use a fake detector and a temporary data folder, so they need no PyTorch, weights or real data.
+79 tests cover the alarm tracker (hysteresis, hold-over, instant path), incident episodes (merge, extend, retry), zones, camera CRUD and validation, a video-file camera end to end (upload → worker → confirmed fire → incident), review and export, migration of old databases, and the model registry (upload rules, hot swap, rollback, failed activation keeping the current model, exact class matching, cache headers). They use a fake detector and a temporary data folder, so they need no PyTorch, weights or real data.
 
 ## Project layout
 ```
 backend/
   app/
     api/        one router per area: cameras, incidents, stats, detect, events, health
-    services/   detector, camera_worker, camera_manager, model_manager, model_registry, confirmation, zones, incidents, imaging
+    services/   detector, camera_worker, camera_manager, model_manager, model_registry, confirmation (alarm tracker), episodes, zones, incidents, imaging
     schemas/    request / response models
     db/         SQLAlchemy models, session, in-place migration
     config.py   main.py

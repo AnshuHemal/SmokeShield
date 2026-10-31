@@ -18,7 +18,12 @@ class Settings(BaseSettings):
     confirm_frames: int = 3  # alarm only if a hazard shows in N of the last M frames
     confirm_window: int = 5
     camera_cooldown: int = 30  # seconds between incidents of the same camera
-    incident_cooldown: float = 15.0  # browser-webcam stream cooldown
+    incident_cooldown: float = 15.0  # browser-webcam: detections closer together than this merge into one incident
+    alarm_hold_seconds: float = 3.0  # keep an alarm (and its box) this long after the last sighting, so it cannot blink
+    instant_confidence: float = 0.75  # one detection this confident confirms at once, without waiting for N frames
+    weak_floor: float = 0.05  # detections down to this confidence are reported as "weak" (never alarmed on)
+    device_capture_width: int = 1280  # ask server webcams for this size (many default to 640x480)
+    device_capture_height: int = 720
 
     # camera workers
     worker_fps: float = 4.0  # max inference rate per camera

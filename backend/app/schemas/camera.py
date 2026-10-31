@@ -33,6 +33,7 @@ class CameraFields(BaseModel):
     confirm_frames: int = Field(settings.confirm_frames, ge=1, le=10)
     confirm_window: int = Field(settings.confirm_window, ge=1, le=10)
     cooldown: int = Field(settings.camera_cooldown, ge=5, le=3600)
+    imgsz: Literal[640, 960, 1280] | None = None  # larger finds smaller flames but is slower; None = model default
     zone: list[tuple[float, float]] | None = None
 
     @field_validator("name")
@@ -89,6 +90,7 @@ class CameraUpdate(BaseModel):
     confirm_frames: int | None = None
     confirm_window: int | None = None
     cooldown: int | None = None
+    imgsz: int | None = None
     zone: list[tuple[float, float]] | None = None
 
 
@@ -104,6 +106,7 @@ class CameraOut(BaseModel):
     confirm_frames: int
     confirm_window: int
     cooldown: int
+    imgsz: int | None
     zone: list[tuple[float, float]] | None
     created_at: UtcDatetime
 
@@ -113,7 +116,8 @@ class CameraState(BaseModel):
     status: CameraStatus
     fps: float = 0.0
     latency_ms: float = 0.0
-    detections: list[Detection] = []
+    detections: list[Detection] = []  # confirmed boxes, including last-known ones held for a moment
+    pending: list[Detection] = []  # seen but not confirmed yet
     last_frame_at: float | None = None  # unix seconds
     error: str | None = None
 

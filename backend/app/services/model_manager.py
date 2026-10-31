@@ -73,11 +73,11 @@ class ModelManager:
         cur = self._current
         return cur.device if cur else "auto"
 
-    def predict(self, frame: np.ndarray, conf: float) -> list[Detection]:
+    def predict(self, frame: np.ndarray, conf: float, imgsz: int | None = None) -> list[Detection]:
         cur = self._current  # one atomic read: the whole call runs on a single model
         if cur is None or not cur.loaded:
             raise RuntimeError("Model not loaded")
-        return cur.predict(frame, conf)
+        return cur.predict(frame, conf, imgsz)
 
     # ----- swapping -----
     def set_current(self, detector: DetectorLike | None, version_id: int | None = None, name: str | None = None) -> None:

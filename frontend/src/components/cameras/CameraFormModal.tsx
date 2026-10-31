@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, FileVideo, Loader2, Radio, ScanEye, Upload, Webcam } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { api, Camera, CameraInput, Point, SourceType } from "../../lib/api";
+import { api, Camera, CameraInput, DetailSize, Point, SourceType } from "../../lib/api";
 import { Modal } from "../Modal";
 import { Switch } from "../Switch";
 import { useToast } from "../Toast";
@@ -13,11 +13,20 @@ const SOURCES: { type: SourceType; label: string; hint: string; icon: typeof Rad
   { type: "device", label: "Server webcam", hint: "A camera plugged into the PC running SmokeShield", icon: Webcam },
 ];
 
-const PRESETS = [
-  { name: "Sensitive", note: "Kitchens, labs", confidence: 0.3, confirm_frames: 2, confirm_window: 3, cooldown: 30 },
-  { name: "Balanced", note: "Offices, warehouses", confidence: 0.4, confirm_frames: 3, confirm_window: 5, cooldown: 30 },
-  { name: "Strict", note: "Outdoor, steam / dust", confidence: 0.55, confirm_frames: 4, confirm_window: 6, cooldown: 60 },
-] as const;
+const PRESETS: readonly { name: string; note: string; confidence: number; confirm_frames: number; confirm_window: number; cooldown: number; imgsz: DetailSize | null }[] = [
+  { name: "Sensitive", note: "Kitchens, labs", confidence: 0.3, confirm_frames: 2, confirm_window: 3, cooldown: 30, imgsz: null },
+  { name: "Balanced", note: "Offices, warehouses", confidence: 0.4, confirm_frames: 3, confirm_window: 5, cooldown: 30, imgsz: null },
+  { name: "Strict", note: "Outdoor, steam / dust", confidence: 0.55, confirm_frames: 4, confirm_window: 6, cooldown: 60, imgsz: null },
+  // Small flames are found in only a fraction of frames, so accept a lower score and fewer hits, and give the model more pixels.
+  { name: "Close-range", note: "Lighter, candle, small flames", confidence: 0.25, confirm_frames: 2, confirm_window: 4, cooldown: 30, imgsz: 960 },
+];
+
+// Measured on this project's model and an Intel i5-9500 CPU (median per frame): 198 ms, 394 ms, 704 ms.
+const DETAIL_OPTIONS: { value: DetailSize | null; label: string }[] = [
+  { value: null, label: "Standard (640) - fastest" },
+  { value: 960, label: "High (960) - about 2x slower, finds smaller flames" },
+  { value: 1280, label: "Maximum (1280) - about 3.5x slower, smallest flames" },
+];
 
 const COOLDOWNS = [15, 30, 60, 120, 300, 600, 1800, 3600];
 const cooldownLabel = (s: number) => (s < 60 ? `${s} seconds` : s < 3600 ? `${s / 60} min` : "1 hour");
@@ -30,13 +39,13 @@ interface FormState extends Omit<CameraInput, "zone"> {
 
 const blank: FormState = {
   name: "", source_type: "stream", source: "", enabled: true,
-  confidence: 0.4, confirm_frames: 3, confirm_window: 5, cooldown: 30, zone: [], zoneEnabled: false,
+  confidence: 0.4, confirm_frames: 3, confirm_window: 5, cooldown: 30, imgsz: null, zone: [], zoneEnabled: false,
 };
 
 // Pick only editable fields: spreading the whole Camera would send id/created_at, which the API rejects.
 const fromCamera = (c: Camera): FormState => ({
   name: c.name, source_type: c.source_type, source: c.source, enabled: c.enabled,
-  confidence: c.confidence, confirm_frames: c.confirm_frames, confirm_window: c.confirm_window, cooldown: c.cooldown,
+  confidence: c.confidence, confirm_frames: c.confirm_frames, confirm_window: c.confirm_window, cooldown: c.cooldown, imgsz: c.imgsz ?? null,
   zone: c.zone ?? [], zoneEnabled: !!c.zone,
 });
 
@@ -76,7 +85,7 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
     setF((s) => ({ ...s, confirm_window: w, confirm_frames: Math.min(Math.max(1, n), w) }));
   };
 
-  const preset = PRESETS.find((p) => p.confidence === f.confidence && p.confirm_frames === f.confirm_frames && p.confirm_window === f.confirm_window && p.cooldown === f.cooldown);
+  const preset = PRESETS.find((p) => p.confidence === f.confidence && p.confirm_frames === f.confirm_frames && p.confirm_window === f.confirm_window && p.cooldown === f.cooldown && p.imgsz === f.imgsz);
 
   const pickType = (type: SourceType) => {
     if (type === f.source_type) return;
@@ -199,13 +208,13 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
           <p className="text-xs text-slate-500">Tune per camera - a kitchen and a warehouse should not share one threshold.</p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {PRESETS.map((p) => (
             <button
               key={p.name}
               type="button"
               aria-pressed={preset?.name === p.name}
-              onClick={() => setF((s) => ({ ...s, confidence: p.confidence, confirm_frames: p.confirm_frames, confirm_window: p.confirm_window, cooldown: p.cooldown }))}
+              onClick={() => setF((s) => ({ ...s, confidence: p.confidence, confirm_frames: p.confirm_frames, confirm_window: p.confirm_window, cooldown: p.cooldown, imgsz: p.imgsz }))}
               className={`rounded-xl border p-3 text-left transition ${preset?.name === p.name ? "border-ember-500 bg-ember-500/10" : "border-ink-600 bg-ink-800 hover:border-slate-500"}`}
             >
               <div className="text-sm font-semibold text-heading">{p.name}</div>
@@ -218,6 +227,12 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
           <input type="range" min={0.1} max={0.9} step={0.05} value={f.confidence} onChange={(e) => set("confidence", Number(e.target.value))} className="w-full accent-orange-500" />
         </Field>
 
+        <Field label="Detail level" hint="How many pixels the model looks at. Small flames (a lighter or match) fill under 1% of the picture and are often missed at Standard; more detail finds them but costs speed, and all cameras share one model.">
+          <select value={f.imgsz ?? ""} onChange={(e) => set("imgsz", e.target.value ? (Number(e.target.value) as DetailSize) : null)} className="input">
+            {DETAIL_OPTIONS.map((o) => <option key={o.label} value={o.value ?? ""}>{o.label}</option>)}
+          </select>
+        </Field>
+
         <div>
           <div className="text-sm font-medium text-slate-300">Temporal confirmation</div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-400">
@@ -228,11 +243,11 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
             frames
           </div>
           <p className="mt-1.5 text-xs text-slate-500">
-            About {(f.confirm_frames / WORKER_FPS).toFixed(1)}s to confirm. Isolated one-frame glitches never trigger an alarm.
+            About {(f.confirm_frames / WORKER_FPS).toFixed(1)}s to confirm at full speed. Isolated one-frame glitches never trigger an alarm, a single very confident detection (75%+) confirms at once, and the alarm stays on for a few seconds after the last sighting so a flickering flame does not blink.
           </p>
         </div>
 
-        <Field label="Cooldown between incidents" hint="While a fire keeps burning, log one incident per this interval instead of hundreds.">
+        <Field label="Merge repeated detections within" hint="A fire that flickers or comes back inside this time extends the same incident instead of creating a new one. Nothing is ever skipped.">
           <select value={f.cooldown} onChange={(e) => set("cooldown", Number(e.target.value))} className="input">
             {COOLDOWNS.map((c) => <option key={c} value={c}>{cooldownLabel(c)}</option>)}
           </select>

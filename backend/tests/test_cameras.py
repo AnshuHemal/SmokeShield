@@ -94,3 +94,22 @@ def test_events_socket_streams_states(client):
     with client.websocket_connect("/ws/events") as ws:
         msg = ws.receive_json()
     assert "cameras" in msg and "events" in msg
+
+
+def test_detail_level_is_validated_stored_and_used_by_the_worker(client, tmp_path):
+    for bad in (800, 0, "high"):
+        r = client.post("/api/cameras", json={**STREAM, "imgsz": bad, "enabled": False})
+        assert r.status_code == 422, bad
+
+    clip = tmp_path / "clip.avi"
+    make_video(clip)
+    fn = client.post("/api/cameras/upload-video", files={"file": ("clip.avi", clip.read_bytes(), "video/x-msvideo")}).json()["filename"]
+    cam = client.post("/api/cameras", json={"name": "Detail", "source_type": "file", "source": fn, "imgsz": 960}).json()
+    assert cam["imgsz"] == 960
+
+    fake = client.app.state.models._current
+    assert wait_for(lambda: 960 in fake.seen_imgsz), "the worker must run the model at the camera's detail level"
+
+    patched = client.patch(f"/api/cameras/{cam['id']}", json={"imgsz": None}).json()  # back to the model default
+    assert patched["imgsz"] is None
+    client.delete(f"/api/cameras/{cam['id']}")

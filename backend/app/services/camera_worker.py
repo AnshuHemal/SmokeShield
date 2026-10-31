@@ -1,11 +1,10 @@
-"""One background thread per enabled camera: read frames, detect, confirm, log incidents."""
+"""One background thread per enabled camera: read frames, detect, track the alarm, record incidents."""
 
 import logging
 import os
 import sys
 import threading
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 
 import cv2
@@ -13,9 +12,9 @@ import numpy as np
 
 from ..config import settings
 from ..schemas.camera import CameraState
-from ..schemas.detection import Detection
-from .confirmation import TemporalConfirmer
+from .confirmation import AlarmTracker
 from .detector import DetectorLike, timed_predict
+from .episodes import EpisodeRecorder, Publish
 from .imaging import annotate, draw_zone, encode_jpeg, resize_to_width
 from .zones import Zone, filter_by_zone
 
@@ -23,8 +22,6 @@ log = logging.getLogger("smokeshield.camera")
 
 # RTSP over TCP is far more reliable than UDP across routers / Wi-Fi.
 os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp")
-
-IncidentCallback = Callable[["CameraConfig", np.ndarray, list[Detection]], None]
 
 
 @dataclass(frozen=True)
@@ -38,14 +35,15 @@ class CameraConfig:
     confidence: float
     confirm_frames: int
     confirm_window: int
-    cooldown: int
+    cooldown: int  # merge window: detections closer together than this belong to one incident
+    imgsz: int | None
     zone: Zone | None
 
     @classmethod
     def from_model(cls, cam) -> "CameraConfig":
         zone = [(float(x), float(y)) for x, y in cam.zone] if cam.zone else None
         return cls(cam.id, cam.name, cam.source_type, cam.source, cam.confidence,
-                   cam.confirm_frames, cam.confirm_window, cam.cooldown, zone)
+                   cam.confirm_frames, cam.confirm_window, cam.cooldown, cam.imgsz, zone)
 
 
 def open_capture(source_type: str, source: str) -> cv2.VideoCapture | None:
@@ -55,7 +53,11 @@ def open_capture(source_type: str, source: str) -> cv2.VideoCapture | None:
         return cv2.VideoCapture(str(path)) if path.exists() else None
     if source_type == "device":
         backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
-        return cv2.VideoCapture(int(source), backend)
+        cap = cv2.VideoCapture(int(source), backend)
+        if cap.isOpened():  # a request, not a demand: the driver picks the closest mode it supports
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, settings.device_capture_width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.device_capture_height)
+        return cap
     ms = settings.stream_timeout_ms
     try:
         return cv2.VideoCapture(
@@ -79,18 +81,17 @@ def grab_one_frame(source_type: str, source: str) -> np.ndarray | None:
 
 
 class CameraWorker(threading.Thread):
-    def __init__(self, cfg: CameraConfig, detector: DetectorLike, on_incident: IncidentCallback) -> None:
+    def __init__(self, cfg: CameraConfig, detector: DetectorLike, publish: Publish) -> None:
         super().__init__(name=f"camera-{cfg.id}", daemon=True)
         self.cfg = cfg
         self._detector = detector
-        self._on_incident = on_incident
         self._halt = threading.Event()
         self._lock = threading.Lock()
         self._state = CameraState(id=cfg.id, status="starting")
         self._jpeg: bytes | None = None
         self._frame: np.ndarray | None = None
-        self._confirmer = TemporalConfirmer(cfg.confirm_frames, cfg.confirm_window)
-        self._last_incident = -1e9
+        self._tracker = AlarmTracker(cfg.confirm_frames, cfg.confirm_window)
+        self._recorder = EpisodeRecorder("camera", cfg.id, cfg.name, cfg.cooldown, publish)
         self._last_ts: float | None = None
         self._fps = 0.0
 
@@ -131,6 +132,7 @@ class CameraWorker(threading.Thread):
             if self._halt.wait(backoff):
                 break
             backoff = min(backoff * 2, 30.0)  # exponential reconnect back-off, max 30 s
+        self._recorder.close_all()
 
     def _loop(self, cap: cv2.VideoCapture) -> None:
         is_file = self.cfg.source_type == "file"
@@ -164,13 +166,13 @@ class CameraWorker(threading.Thread):
 
     def _process(self, frame: np.ndarray) -> None:
         cfg = self.cfg
-        dets, latency = timed_predict(self._detector, frame, cfg.confidence)
+        dets, latency = timed_predict(self._detector, frame, cfg.confidence, cfg.imgsz)
         dets = filter_by_zone(dets, cfg.zone)
-        confirmed = self._confirmer.update(dets)
-        shown = [d for d in dets if d.label in confirmed]
-        status = "fire" if "fire" in confirmed else "smoke" if "smoke" in confirmed else "ok"
+        now = time.monotonic()
+        result = self._tracker.update(dets, now)
+        status = "fire" if "fire" in result.active else "smoke" if "smoke" in result.active else "ok"
 
-        vis = annotate(draw_zone(frame, cfg.zone), shown)
+        vis = annotate(draw_zone(frame, cfg.zone), result.shown, result.pending)
         jpeg = encode_jpeg(resize_to_width(vis, 960), 72)
 
         wall = time.time()
@@ -184,19 +186,14 @@ class CameraWorker(threading.Thread):
             self._frame = frame
             self._state = CameraState(
                 id=cfg.id, status=status, fps=round(self._fps, 1), latency_ms=latency,
-                detections=shown, last_frame_at=wall,
+                detections=result.shown, pending=result.pending, last_frame_at=wall,
             )
 
-        mono = time.monotonic()
-        if shown and mono - self._last_incident >= cfg.cooldown:
-            self._last_incident = mono
-            try:
-                self._on_incident(cfg, frame, shown)
-            except Exception:  # noqa: BLE001
-                log.exception("camera %s: could not log incident", cfg.id)
+        self._recorder.process(frame, result, now)  # records, merges and extends incidents; never raises
 
     def _go_offline(self, message: str) -> None:
-        self._confirmer.reset()
+        self._tracker.reset()
+        self._recorder.close_all()
         self._fps = 0.0
         self._last_ts = None
         with self._lock:

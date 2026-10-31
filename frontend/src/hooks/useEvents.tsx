@@ -3,14 +3,14 @@ import { api, CameraState, Label } from "../lib/api";
 
 export interface IncidentEvent {
   seq: number;
-  type: "incident";
-  incident: { id: number; label: Label; confidence: number; camera_id: number; camera_name: string; created_at: string };
+  type: "incident" | "incident_update"; // a new incident, or an existing one that was extended or improved
+  incident: { id: number; label: Label; confidence: number; camera_id: number | null; camera_name: string; created_at?: string };
 }
 
 interface EventsContextValue {
   states: Record<number, CameraState>;
   connected: boolean;
-  /** Subscribe to new-incident events; returns an unsubscribe function. */
+  /** Subscribe to incident events (new and updated); returns an unsubscribe function. */
   onIncident: (cb: (e: IncidentEvent) => void) => () => void;
 }
 

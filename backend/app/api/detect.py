@@ -1,7 +1,6 @@
 import asyncio
 import json
 import tempfile
-import time
 from pathlib import Path
 
 import cv2
@@ -10,8 +9,9 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 
 from ..config import settings
 from ..schemas.detection import ImageResult, TimelinePoint, VideoResult
-from ..services.confirmation import TemporalConfirmer
+from ..services.confirmation import AlarmTracker
 from ..services.detector import DetectorLike, timed_predict
+from ..services.episodes import EpisodeRecorder
 from ..services.imaging import annotate, data_url, decode_image, encode_jpeg
 from ..services.incidents import log_incident
 from .deps import get_detector
@@ -109,12 +109,20 @@ async def detect_video(
         Path(tmp.name).unlink(missing_ok=True)
 
 
+ALLOWED_IMGSZ = {640, 960, 1280}
+
+
 @router.websocket("/ws/stream")
-async def stream(ws: WebSocket, conf: float = settings.confidence):
-    """Browser-webcam stream: client sends JPEG frames (binary), server replies with JSON per frame.
+async def stream(ws: WebSocket, conf: float = settings.confidence, imgsz: int | None = None):
+    """Browser-webcam stream: the client sends JPEG frames (binary), the server replies with JSON per frame.
 
     The client should wait for each reply before sending the next frame (natural back-pressure).
-    `alert` is temporally confirmed (N of the last M frames), like server-side cameras.
+    Reply fields:
+      detections  confirmed boxes; `held: true` marks the last known box kept on screen after a missed frame
+      pending     seen but not confirmed yet ("verifying")
+      weak        below your confidence threshold: never alarms, shown so you can tune sensitivity
+      alert       a hazard is confirmed right now
+    A text message {"conf": 0.3, "imgsz": 960} changes the threshold / inference size while streaming.
     """
     await ws.accept()
     det: DetectorLike = ws.app.state.detector
@@ -122,41 +130,45 @@ async def stream(ws: WebSocket, conf: float = settings.confidence):
         await ws.send_json({"error": "model_missing"})
         await ws.close(code=1011)
         return
-    confirmer = TemporalConfirmer(settings.confirm_frames, settings.confirm_window)
-    last_logged: dict[str, float] = {}
+    size = imgsz if imgsz in ALLOWED_IMGSZ else None
+    tracker = AlarmTracker(settings.confirm_frames, settings.confirm_window)
+    recorder = EpisodeRecorder("live", None, "Browser Cam", settings.incident_cooldown, ws.app.state.manager.publish)
     try:
         while True:
             msg = await ws.receive()
             if msg.get("type") == "websocket.disconnect":
                 break
             if msg.get("bytes") is None:
-                if msg.get("text"):  # live threshold change: {"conf": 0.5}
+                if msg.get("text"):
                     try:
-                        conf = min(0.95, max(0.05, float(json.loads(msg["text"])["conf"])))
-                    except (ValueError, KeyError, TypeError):
+                        data = json.loads(msg["text"])
+                        if "conf" in data:
+                            conf = min(0.95, max(0.05, float(data["conf"])))
+                        if "imgsz" in data:
+                            size = data["imgsz"] if data["imgsz"] in ALLOWED_IMGSZ else None
+                    except (ValueError, TypeError):
                         pass
                 continue
             frame = cv2.imdecode(np.frombuffer(msg["bytes"], np.uint8), cv2.IMREAD_COLOR)
             if frame is None:
                 continue
-            dets, ms = await asyncio.to_thread(timed_predict, det, frame, conf)
-            confirmed = confirmer.update(dets)
-            incident_id = None
-            now = time.monotonic()
-            fresh = [d for d in dets if d.label in confirmed and now - last_logged.get(d.label, -1e9) >= settings.incident_cooldown]
-            if fresh:
-                for d in fresh:
-                    last_logged[d.label] = now
-                inc = await asyncio.to_thread(log_incident, frame, [d for d in dets if d.label in confirmed], "live")
-                incident_id = inc.id if inc else None
+            # Run down to a low floor so sub-threshold candidates can be reported as "weak".
+            raw, ms = await asyncio.to_thread(timed_predict, det, frame, min(conf, settings.weak_floor), size)
+            strong = [d for d in raw if d.confidence >= conf]
+            weak = [d for d in raw if d.confidence < conf]
+            result = tracker.update(strong)
+            await asyncio.to_thread(recorder.process, frame, result)
             await ws.send_json(
                 {
-                    "detections": [d.model_dump() for d in dets],
+                    "detections": [d.model_dump() for d in result.shown],
+                    "pending": [d.model_dump() for d in result.pending],
+                    "weak": [d.model_dump() for d in weak],
                     "latency_ms": ms,
-                    "alert": bool(confirmed),
-                    "confirmed": sorted(confirmed),
-                    "incident_id": incident_id,
+                    "alert": bool(result.active),
+                    "confirmed": sorted(result.active),
                 }
             )
     except WebSocketDisconnect:
         pass
+    finally:
+        await asyncio.to_thread(recorder.close_all)  # leaving the page must not leave an incident looking "ongoing"

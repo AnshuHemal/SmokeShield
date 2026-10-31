@@ -19,6 +19,8 @@ class IncidentOut(BaseModel):
     source: Source
     status: ReviewStatus
     reviewed_at: UtcDatetime | None = None
+    ended_at: UtcDatetime | None = None  # last time the hazard was seen: the incident lasted from created_at to here
+    duration_s: float | None = None
     camera_id: int | None = None
     camera_name: str | None = None
     snapshot_url: str | None = None

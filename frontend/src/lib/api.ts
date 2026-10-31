@@ -7,6 +7,7 @@ export interface Detection {
   label: Label;
   confidence: number;
   box: [number, number, number, number]; // normalised x1,y1,x2,y2
+  held?: boolean; // last known box kept on screen briefly after a missed frame
 }
 
 export interface Health {
@@ -42,6 +43,7 @@ export interface VideoResult {
 }
 
 export type Point = [number, number];
+export type DetailSize = 640 | 960 | 1280;
 
 export interface CameraInput {
   name: string;
@@ -51,7 +53,8 @@ export interface CameraInput {
   confidence: number;
   confirm_frames: number;
   confirm_window: number;
-  cooldown: number;
+  cooldown: number; // merge window: detections closer together than this belong to one incident
+  imgsz: DetailSize | null; // inference size; null = model default
   zone: Point[] | null;
 }
 
@@ -65,7 +68,8 @@ export interface CameraState {
   status: CameraStatus;
   fps: number;
   latency_ms: number;
-  detections: Detection[];
+  detections: Detection[]; // confirmed, including last-known boxes held for a moment
+  pending: Detection[]; // seen but not confirmed yet
   last_frame_at: number | null;
   error: string | null;
 }
@@ -78,6 +82,8 @@ export interface Incident {
   source: "live" | "image" | "video" | "camera";
   status: ReviewStatus;
   reviewed_at: string | null;
+  ended_at: string | null; // last time the hazard was seen
+  duration_s: number | null;
   camera_id: number | null;
   camera_name: string | null;
   snapshot_url: string | null;
@@ -225,7 +231,7 @@ export const api = {
   // one-off analysis + browser webcam
   detectImage: (file: File, conf: number) => upload<ImageResult>("/api/detect/image", file, conf),
   detectVideo: (file: File, conf: number) => upload<VideoResult>("/api/detect/video", file, conf),
-  streamUrl: (conf: number) => wsUrl(`/ws/stream?conf=${conf}`),
+  streamUrl: (conf: number, imgsz?: number) => wsUrl(`/ws/stream?conf=${conf}${imgsz ? `&imgsz=${imgsz}` : ""}`),
   eventsUrl: () => wsUrl("/ws/events"),
 
   // model registry
@@ -274,6 +280,17 @@ export const COLORS: Record<Label, string> = { fire: "#ff5a36", smoke: "#94a3b8"
 /** Theme-aware label colours for UI text and charts: they resolve through CSS variables. */
 export const LABEL_COLOR: Record<Label, string> = { fire: "rgb(var(--fire))", smoke: "rgb(var(--smoke))" };
 export const labelTint = (label: Label, alpha = 0.15) => `rgb(var(--${label}) / ${alpha})`;
+
+export function formatDuration(seconds: number) {
+  const t = Math.round(seconds);
+  if (t < 60) return `${t}s`;
+  const m = Math.floor(t / 60), r = t % 60;
+  if (m < 60) return r ? `${m}m ${r}s` : `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+/** Still being seen: the server moves `ended_at` forward at least every few seconds while a hazard lasts. */
+export const isOngoing = (i: Incident) => !!i.ended_at && Date.now() - new Date(i.ended_at).getTime() < 15000;
 
 export const timeAgo = (iso: string) => {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);

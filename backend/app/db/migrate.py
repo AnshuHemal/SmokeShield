@@ -12,15 +12,25 @@ INCIDENT_COLUMNS = {
     "camera_name": "VARCHAR(80)",
     "status": "VARCHAR(16) NOT NULL DEFAULT 'new'",
     "reviewed_at": "DATETIME",
+    "ended_at": "DATETIME",
 }
+
+CAMERA_COLUMNS = {
+    "imgsz": "INTEGER",
+}
+
+
+def _add_missing(conn, inspector, table: str, wanted: dict[str, str]) -> None:
+    if table not in inspector.get_table_names():
+        return  # fresh database - create_all builds it
+    existing = {c["name"] for c in inspector.get_columns(table)}
+    for name, ddl in wanted.items():
+        if name not in existing:
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
 
 
 def migrate(engine: Engine) -> None:
     inspector = inspect(engine)
-    if "incidents" not in inspector.get_table_names():
-        return  # fresh database - create_all builds everything
-    existing = {c["name"] for c in inspector.get_columns("incidents")}
     with engine.begin() as conn:
-        for name, ddl in INCIDENT_COLUMNS.items():
-            if name not in existing:
-                conn.execute(text(f"ALTER TABLE incidents ADD COLUMN {name} {ddl}"))
+        _add_missing(conn, inspector, "incidents", INCIDENT_COLUMNS)
+        _add_missing(conn, inspector, "cameras", CAMERA_COLUMNS)

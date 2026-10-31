@@ -4,16 +4,13 @@ import logging
 import threading
 from collections import deque
 
-import numpy as np
 from sqlalchemy import select
 
 from ..db.models import Camera
 from ..db.session import SessionLocal
 from ..schemas.camera import CameraState
-from ..schemas.detection import Detection
 from .camera_worker import CameraConfig, CameraWorker
 from .detector import DetectorLike
-from .incidents import log_incident
 
 log = logging.getLogger("smokeshield.manager")
 
@@ -58,7 +55,7 @@ class CameraManager:
             self._enabled[cam.id] = cam.enabled
         self._halt(old)  # join outside the lock: a worker may be waiting on it inside _on_incident
         if cam.enabled and self._detector.loaded:
-            worker = CameraWorker(CameraConfig.from_model(cam), self._detector, self._on_incident)
+            worker = CameraWorker(CameraConfig.from_model(cam), self._detector, self.publish)
             with self._lock:
                 self._workers[cam.id] = worker
             worker.start()
@@ -104,24 +101,8 @@ class CameraManager:
     def events_after(self, seq: int) -> list[dict]:
         return [e for e in list(self._events) if e["seq"] > seq]
 
-    def _on_incident(self, cfg: CameraConfig, frame: np.ndarray, dets: list[Detection]) -> None:
-        inc = log_incident(frame, dets, "camera", camera_id=cfg.id, camera_name=cfg.name)
-        if not inc:
-            return
+    def publish(self, kind: str, incident: dict) -> None:
+        """Queue an event for dashboards: "incident" (a new one) or "incident_update" (extended or improved)."""
         with self._lock:
             self._seq += 1
-            self._events.append(
-                {
-                    "seq": self._seq,
-                    "type": "incident",
-                    "incident": {
-                        "id": inc.id,
-                        "label": inc.label,
-                        "confidence": inc.confidence,
-                        "camera_id": cfg.id,
-                        "camera_name": cfg.name,
-                        "created_at": inc.created_at.isoformat() + "Z",
-                    },
-                }
-            )
-        log.warning("INCIDENT %s on %s (%.0f%%)", inc.label.upper(), cfg.name, inc.confidence * 100)
+            self._events.append({"seq": self._seq, "type": kind, "incident": incident})

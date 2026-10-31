@@ -33,7 +33,15 @@ export function CameraTile({ camera, state, onOpen }: { camera: Camera; state?: 
         {status === "fire" && <div className="pointer-events-none absolute inset-0 animate-pulse bg-red-600/10" />}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/80 to-transparent" />
 
-        <div className="absolute left-3 top-3"><StatusPill status={status} /></div>
+        <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
+          <StatusPill status={status} />
+          {!!state?.pending?.length && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-2.5 py-1 text-xs font-semibold text-slate-900" role="status">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-900" />
+              Verifying {state.pending[0].label} {Math.round(state.pending[0].confidence * 100)}%
+            </span>
+          )}
+        </div>
         <div className="absolute right-3 top-3 rounded-md bg-black/50 p-1.5 text-slate-300 opacity-0 backdrop-blur transition group-hover:opacity-100">
           <Maximize2 size={14} />
         </div>
@@ -50,7 +58,7 @@ export function CameraTile({ camera, state, onOpen }: { camera: Camera; state?: 
           {state?.detections.length ? (
             <div className="flex gap-1">
               {state.detections.slice(0, 3).map((d, i) => (
-                <span key={i} className={`rounded px-1.5 py-0.5 text-xs font-bold uppercase ${d.label === "fire" ? "bg-red-600 text-white" : "bg-white/90 text-slate-900"}`}>
+                <span key={i} title={d.held ? "Last seen a moment ago" : undefined} className={`rounded px-1.5 py-0.5 text-xs font-bold uppercase ${d.held ? "opacity-70" : ""} ${d.label === "fire" ? "bg-red-600 text-white" : "bg-white/90 text-slate-900"}`}>
                   {d.label} {Math.round(d.confidence * 100)}%
                 </span>
               ))}

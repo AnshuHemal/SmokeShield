@@ -18,7 +18,7 @@ class DetectorLike(Protocol):
     classes: list[str]
     device: str
 
-    def predict(self, frame: np.ndarray, conf: float) -> list[Detection]: ...
+    def predict(self, frame: np.ndarray, conf: float, imgsz: int | None = None) -> list[Detection]: ...
 
 
 _FIRE_NAMES = {"fire", "flame", "flames", "wildfire"}
@@ -67,11 +67,11 @@ class YoloDetector:
         self.predict(np.zeros((self.image_size, self.image_size, 3), np.uint8), 0.5)  # warm-up
         log.info("Loaded %s (classes: %s)", self.weights.name, self.classes)
 
-    def predict(self, frame: np.ndarray, conf: float) -> list[Detection]:
+    def predict(self, frame: np.ndarray, conf: float, imgsz: int | None = None) -> list[Detection]:
         if not self._model:
             raise RuntimeError("Model not loaded")
         h, w = frame.shape[:2]
-        kwargs = {"conf": conf, "imgsz": self.image_size, "verbose": False}
+        kwargs = {"conf": conf, "imgsz": imgsz or self.image_size, "verbose": False}  # bigger imgsz finds smaller flames
         if self.device != "auto":
             kwargs["device"] = self.device
         with self._lock:
@@ -92,7 +92,9 @@ class YoloDetector:
         return out
 
 
-def timed_predict(detector: DetectorLike, frame: np.ndarray, conf: float) -> tuple[list[Detection], float]:
+def timed_predict(
+    detector: DetectorLike, frame: np.ndarray, conf: float, imgsz: int | None = None
+) -> tuple[list[Detection], float]:
     t0 = time.perf_counter()
-    dets = detector.predict(frame, conf)
+    dets = detector.predict(frame, conf, imgsz)
     return dets, round((time.perf_counter() - t0) * 1000, 1)

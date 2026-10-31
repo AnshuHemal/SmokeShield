@@ -10,6 +10,7 @@ class Detection(BaseModel):
     confidence: float
     # normalised [x1, y1, x2, y2] in 0..1 so any client can scale it to its own canvas
     box: tuple[float, float, float, float]
+    held: bool = False  # last known box kept on screen briefly after a missed frame; not a fresh detection
 
 
 class ImageResult(BaseModel):
