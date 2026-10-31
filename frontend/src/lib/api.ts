@@ -43,6 +43,7 @@ export interface VideoResult {
 }
 
 export type Point = [number, number];
+export type Area = [number, number, number, number]; // normalised x1, y1, x2, y2
 export type DetailSize = 640 | 960 | 1280;
 
 export interface CameraInput {
@@ -56,6 +57,9 @@ export interface CameraInput {
   cooldown: number; // merge window: detections closer together than this belong to one incident
   imgsz: DetailSize | null; // inference size; null = model default
   zone: Point[] | null;
+  detect_smoke: boolean; // false = fire only
+  smoke_confidence: number | null; // stricter bar for smoke alone; null = same as `confidence`
+  ignore_areas: Area[] | null; // known false-alarm spots (a fan's shadow, a window): detections inside are dropped
 }
 
 export interface Camera extends CameraInput {

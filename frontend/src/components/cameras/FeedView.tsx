@@ -46,6 +46,8 @@ function Body({ camera, state, onEdit, onClose }: { camera: Camera; state?: Came
           <Row k="Detail" v={camera.imgsz ? `${camera.imgsz} px` : "Standard (640 px)"} />
           <Row k="Merge window" v={`${camera.cooldown}s`} />
           <Row k="Zone" v={camera.zone ? `${camera.zone.length} points` : "Full frame"} />
+          <Row k="Smoke" v={!camera.detect_smoke ? "Off (fire only)" : camera.smoke_confidence ? `${Math.round(camera.smoke_confidence * 100)}%+` : "Same as fire"} />
+          <Row k="Ignored areas" v={camera.ignore_areas?.length ? String(camera.ignore_areas.length) : "None"} />
         </dl>
 
         <div>

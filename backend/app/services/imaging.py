@@ -95,6 +95,27 @@ def draw_zone(frame: np.ndarray, zone: list[tuple[float, float]] | None) -> np.n
     return out
 
 
+def draw_ignored(frame: np.ndarray, areas) -> np.ndarray:
+    """Grey out the areas the user told us to ignore, with a dashed outline, so it is obvious what the camera is not watching."""
+    if not areas:
+        return frame
+    h, w = frame.shape[:2]
+    out = frame.copy()
+    for x1, y1, x2, y2 in areas:
+        p1, p2 = (int(x1 * w), int(y1 * h)), (int(x2 * w), int(y2 * h))
+        region = out[p1[1]:p2[1], p1[0]:p2[0]]
+        if region.size:
+            out[p1[1]:p2[1], p1[0]:p2[0]] = (region * 0.35 + 90 * 0.65).astype(np.uint8)
+        for xa in range(p1[0], p2[0], 16):  # dashed outline (OpenCV has no dashed line)
+            cv2.line(out, (xa, p1[1]), (min(xa + 8, p2[0]), p1[1]), (200, 200, 200), 2)
+            cv2.line(out, (xa, p2[1]), (min(xa + 8, p2[0]), p2[1]), (200, 200, 200), 2)
+        for ya in range(p1[1], p2[1], 16):
+            cv2.line(out, (p1[0], ya), (p1[0], min(ya + 8, p2[1])), (200, 200, 200), 2)
+            cv2.line(out, (p2[0], ya), (p2[0], min(ya + 8, p2[1])), (200, 200, 200), 2)
+        cv2.putText(out, "ignored", (p1[0] + 6, p1[1] + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (235, 235, 235), 1, cv2.LINE_AA)
+    return out
+
+
 def resize_to_width(frame: np.ndarray, width: int) -> np.ndarray:
     h, w = frame.shape[:2]
     if w <= width:

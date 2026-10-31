@@ -19,6 +19,16 @@ log = logging.getLogger("smokeshield.incidents")
 CLASS_IDS = {"smoke": 0, "fire": 1}  # same order as the D-Fire training data
 
 
+def headline(detections: list[Detection]) -> tuple[str, float]:
+    """The one label and confidence an incident is filed under.
+
+    A flame and the smoke around it are ONE event, so they share one incident. It is filed as fire whenever any fire
+    was seen (fire outranks smoke), with the best fire confidence; otherwise as smoke.
+    """
+    label = "fire" if any(d.label == "fire" for d in detections) else "smoke"
+    return label, max(d.confidence for d in detections if d.label == label)
+
+
 def log_incident(
     frame: np.ndarray,
     detections: list[Detection],
@@ -26,17 +36,17 @@ def log_incident(
     camera_id: int | None = None,
     camera_name: str | None = None,
 ) -> Incident | None:
-    """Persist the strongest detection with an annotated and a clean snapshot."""
+    """Persist one incident for everything seen in this frame, with an annotated and a clean snapshot."""
     if not detections:
         return None
-    top = max(detections, key=lambda d: d.confidence)
+    label, confidence = headline(detections)
     stem = uuid.uuid4().hex
     (settings.snapshot_dir / f"{stem}.jpg").write_bytes(encode_jpeg(annotate(frame, detections)))
     (settings.snapshot_dir / f"{stem}_raw.jpg").write_bytes(encode_jpeg(frame, 90))
     with SessionLocal() as db:
         inc = Incident(
-            label=top.label,
-            confidence=top.confidence,
+            label=label,
+            confidence=confidence,
             source=source,
             snapshot=f"{stem}.jpg",
             raw_snapshot=f"{stem}_raw.jpg",
@@ -62,10 +72,10 @@ def touch_incident(incident_id: int, seen_at: datetime | None = None) -> bool:
 
 
 def improve_incident(incident_id: int, frame: np.ndarray, detections: list[Detection], seen_at: datetime | None = None) -> bool:
-    """Replace the incident's pictures with a better (more confident) frame from the same episode. False = it was deleted."""
+    """Replace the incident's pictures with a better frame from the same episode. False = it was deleted."""
     if not detections:
         return True
-    top = max(detections, key=lambda d: d.confidence)
+    label, confidence = headline(detections)
     with SessionLocal() as db:
         inc = db.get(Incident, incident_id)
         if not inc:
@@ -74,7 +84,8 @@ def improve_incident(incident_id: int, frame: np.ndarray, detections: list[Detec
             (settings.snapshot_dir / inc.snapshot).write_bytes(encode_jpeg(annotate(frame, detections)))
         if inc.raw_snapshot:
             (settings.snapshot_dir / inc.raw_snapshot).write_bytes(encode_jpeg(frame, 90))
-        inc.confidence = top.confidence
+        inc.label = label
+        inc.confidence = confidence
         inc.detections = [d.model_dump() for d in detections]
         inc.ended_at = seen_at or utcnow()
         db.commit()

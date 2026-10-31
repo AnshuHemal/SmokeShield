@@ -17,6 +17,9 @@ INCIDENT_COLUMNS = {
 
 CAMERA_COLUMNS = {
     "imgsz": "INTEGER",
+    "detect_smoke": "BOOLEAN NOT NULL DEFAULT 1",
+    "smoke_confidence": "FLOAT",
+    "ignore_areas": "JSON",
 }
 
 

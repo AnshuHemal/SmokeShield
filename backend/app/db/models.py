@@ -21,6 +21,10 @@ class Camera(Base):
     cooldown: Mapped[int] = mapped_column(Integer, default=30)  # merge window: detections this close share one incident
     imgsz: Mapped[int | None] = mapped_column(Integer, nullable=True)  # inference size; None = the model's default
     zone: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [[x, y], ...] normalised polygon
+    # smoke is the class that shadows and steam fool, so it gets its own switch and its own (stricter) threshold
+    detect_smoke: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    smoke_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)  # None = same as `confidence`
+    ignore_areas: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [[x1, y1, x2, y2], ...] known false-alarm spots
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

@@ -11,6 +11,7 @@ from .system import UtcDatetime
 SourceType = Literal["stream", "file", "device"]
 CameraStatus = Literal["starting", "ok", "smoke", "fire", "offline", "disabled"]
 STREAM_SCHEMES = {"rtsp", "rtsps", "rtmp", "http", "https"}
+MAX_IGNORE_AREAS = 16
 _CRED = re.compile(r"(://[^:/@]+:)[^@/]+@")
 
 
@@ -35,6 +36,9 @@ class CameraFields(BaseModel):
     cooldown: int = Field(settings.camera_cooldown, ge=5, le=3600)
     imgsz: Literal[640, 960, 1280] | None = None  # larger finds smaller flames but is slower; None = model default
     zone: list[tuple[float, float]] | None = None
+    detect_smoke: bool = True
+    smoke_confidence: float | None = Field(None, ge=0.1, le=0.95)  # None = same as `confidence`; never lower than it
+    ignore_areas: list[tuple[float, float, float, float]] | None = None  # [x1, y1, x2, y2] boxes, normalised
 
     @field_validator("name")
     @classmethod
@@ -53,6 +57,18 @@ class CameraFields(BaseModel):
             raise ValueError("zone needs 3-32 points")
         if any(not (0 <= x <= 1 and 0 <= y <= 1) for x, y in v):
             raise ValueError("zone points must be normalised to 0..1")
+        return v
+
+    @field_validator("ignore_areas")
+    @classmethod
+    def _areas(cls, v):
+        if not v:
+            return None
+        if len(v) > MAX_IGNORE_AREAS:
+            raise ValueError(f"at most {MAX_IGNORE_AREAS} ignored areas")
+        for x1, y1, x2, y2 in v:
+            if not (0 <= x1 < x2 <= 1 and 0 <= y1 < y2 <= 1):
+                raise ValueError("an ignored area needs 0 <= x1 < x2 <= 1 and 0 <= y1 < y2 <= 1")
         return v
 
     @model_validator(mode="after")
@@ -92,6 +108,9 @@ class CameraUpdate(BaseModel):
     cooldown: int | None = None
     imgsz: int | None = None
     zone: list[tuple[float, float]] | None = None
+    detect_smoke: bool | None = None
+    smoke_confidence: float | None = None
+    ignore_areas: list[tuple[float, float, float, float]] | None = None
 
 
 class CameraOut(BaseModel):
@@ -108,6 +127,9 @@ class CameraOut(BaseModel):
     cooldown: int
     imgsz: int | None
     zone: list[tuple[float, float]] | None
+    detect_smoke: bool = True
+    smoke_confidence: float | None = None
+    ignore_areas: list[tuple[float, float, float, float]] | None = None
     created_at: UtcDatetime
 
 

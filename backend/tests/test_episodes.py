@@ -120,7 +120,60 @@ def test_closing_marks_the_end_so_it_stops_looking_ongoing(rec):
     assert len(incidents(rec.name)) == 1
 
 
-def test_smoke_and_fire_are_separate_incidents(rec):
-    fire, smoke = det(0.6, "fire"), det(0.6, "smoke")
-    rec.process(FRAME, TrackResult(active={"fire", "smoke"}, shown=[fire, smoke], current=[fire, smoke]), now=0)
-    assert sorted(i.label for i in incidents(rec.name)) == ["fire", "smoke"]
+def both(fire_conf=0.6, smoke_conf=0.5):
+    fire, smoke = det(fire_conf, "fire"), det(smoke_conf, "smoke")
+    return TrackResult(active={"fire", "smoke"}, shown=[fire, smoke], current=[fire, smoke])
+
+
+def test_a_flame_and_its_smoke_are_one_incident_filed_as_fire(rec):
+    """A lighter shows a flame AND smoke at once. That is one event, so it must be one entry in the list."""
+    rec.process(FRAME, both(), now=0)
+    rows = incidents(rec.name)
+    assert len(rows) == 1
+    assert rows[0].label == "fire" and rows[0].confidence == pytest.approx(0.6)  # the fire's confidence, not the smoke's
+    assert {d["label"] for d in rows[0].detections} == {"fire", "smoke"}  # the picture shows both boxes
+    assert [k for k, _ in rec.events].count("incident") == 1
+
+
+def test_smoke_first_then_flame_is_one_incident_upgraded_to_fire(rec):
+    rec.process(FRAME, active(0.6, "smoke"), now=0)
+    rec.process(FRAME, both(fire_conf=0.55, smoke_conf=0.6), now=1)  # flame appears a second later
+    rows = incidents(rec.name)
+    assert len(rows) == 1 and rows[0].label == "fire"
+    assert any(k == "incident_update" and d["label"] == "fire" for k, d in rec.events)
+
+
+def test_an_incident_is_never_downgraded_from_fire_to_smoke(rec):
+    rec.process(FRAME, both(), now=0)
+    rec.process(FRAME, active(0.95, "smoke"), now=10)  # only smoke left, and very confident
+    assert incidents(rec.name)[0].label == "fire"
+
+
+def test_one_lighter_flick_with_flickering_labels_stays_one_incident(rec):
+    """Fire and smoke each appear, vanish and return while the lighter is held up: still ONE incident."""
+    frames = [both(), active(0.5, "smoke"), both(0.7, 0.55), held(), active(0.62, "fire"), both(0.5, 0.45), active(0.58, "smoke")]
+    for t, result in enumerate(frames):
+        rec.process(FRAME, result, now=float(t))
+    rec.process(FRAME, TrackResult(ended={"fire", "smoke"}), now=10)
+    rec.process(FRAME, both(0.65, 0.5), now=22)  # lighter lifted again after 12 s, inside the 30 s merge window
+    rows = incidents(rec.name)
+    assert len(rows) == 1
+    assert rows[0].ended_at > rows[0].created_at
+
+
+def test_the_best_picture_replaces_the_snapshot_so_the_list_shows_one_image(rec):
+    rec.process(np.full((48, 64, 3), 30, np.uint8), both(0.45, 0.4), now=0)
+    name = incidents(rec.name)[0].snapshot
+    first = (settings.snapshot_dir / name).read_bytes()
+    rec.process(np.full((48, 64, 3), 220, np.uint8), both(0.9, 0.7), now=6)
+    row = incidents(rec.name)[0]
+    assert len(incidents(rec.name)) == 1 and row.snapshot == name
+    assert row.confidence == pytest.approx(0.9)
+    assert (settings.snapshot_dir / name).read_bytes() != first
+
+
+def test_a_new_event_after_the_merge_window_is_still_a_separate_incident(rec):
+    rec.process(FRAME, both(), now=0)
+    rec.process(FRAME, TrackResult(ended={"fire", "smoke"}), now=5)
+    rec.process(FRAME, both(), now=200)
+    assert len(incidents(rec.name)) == 2

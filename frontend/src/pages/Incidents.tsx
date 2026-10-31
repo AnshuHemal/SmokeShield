@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Camera as CameraIcon, Check, CheckSquare, Download, GraduationCap, History, Loader2, Trash2, X } from "lucide-react";
+import { Camera as CameraIcon, Check, CheckSquare, Download, EyeOff, GraduationCap, History, Loader2, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ConfirmDialog, Modal } from "../components/Modal";
@@ -10,14 +10,14 @@ import { useToast } from "../components/Toast";
 import { Chip, Empty, LabelBadge, PageHeader, ReviewBadge } from "../components/ui";
 import { useCameras } from "../hooks/useCameras";
 import { useEvents } from "../hooks/useEvents";
-import { api, formatDuration, Incident, IncidentQuery, isOngoing, Label, ReviewStatus, Stats, timeAgo } from "../lib/api";
+import { api, Area, formatDuration, Incident, IncidentQuery, isOngoing, Label, ReviewStatus, Stats, timeAgo } from "../lib/api";
 
 const PAGE = 48;
 
 export default function Incidents() {
   const [params, setParams] = useSearchParams();
   const toast = useToast();
-  const { cameras } = useCameras();
+  const { cameras, reload: reloadCameras } = useCameras();
   const { onIncident } = useEvents();
 
   const label = (params.get("label") as Label | null) ?? undefined;
@@ -77,7 +77,7 @@ export default function Incidents() {
     }
   };
 
-  const review = async (inc: Incident, next: ReviewStatus) => {
+  const review = async (inc: Incident, next: ReviewStatus, quiet = false) => {
     const previous = inc.status;
     const patch = (s: ReviewStatus) => {
       setItems((x) => x?.map((i) => (i.id === inc.id ? { ...i, status: s } : i)) ?? x);
@@ -87,10 +87,37 @@ export default function Incidents() {
     try {
       await api.reviewIncident(inc.id, next);
       loadStats();
-      if (next !== "new") toast({ tone: "success", title: next === "real" ? "Marked as real" : "Marked as false alarm", description: "Saved for model retraining." });
+      if (next !== "new" && !quiet) toast({ tone: "success", title: next === "real" ? "Marked as real" : "Marked as false alarm", description: "Saved for model retraining." });
     } catch (e) {
       patch(previous);
       toast({ tone: "error", title: "Could not save review", description: e instanceof Error ? e.message : undefined });
+    }
+  };
+
+  // The incident's own boxes, padded a little, become an ignored area on its camera: a one-click fix for a fixed
+  // false-alarm source such as a ceiling-fan shadow, and the incident is filed as a false alarm for retraining.
+  const canIgnore = (inc: Incident) => inc.camera_id != null && inc.detections.length > 0 && !!cameras?.some((c) => c.id === inc.camera_id);
+  const ignoreArea = async (inc: Incident) => {
+    const cam = cameras?.find((c) => c.id === inc.camera_id);
+    if (!cam || !inc.detections.length) return;
+    const pad = 0.02, clamp = (n: number) => Math.min(1, Math.max(0, n));
+    const area: Area = [
+      clamp(Math.min(...inc.detections.map((d) => d.box[0])) - pad), clamp(Math.min(...inc.detections.map((d) => d.box[1])) - pad),
+      clamp(Math.max(...inc.detections.map((d) => d.box[2])) + pad), clamp(Math.max(...inc.detections.map((d) => d.box[3])) + pad),
+    ];
+    const existing = cam.ignore_areas ?? [];
+    const covered = existing.some((a) => a[0] <= area[0] + 0.005 && a[1] <= area[1] + 0.005 && a[2] >= area[2] - 0.005 && a[3] >= area[3] - 0.005);
+    try {
+      if (!covered) await api.updateCamera(cam.id, { ignore_areas: [...existing, area] });
+      await reloadCameras();
+      if (inc.status !== "false_alarm") await review(inc, "false_alarm", true);
+      toast({
+        tone: "success",
+        title: covered ? "That area is already ignored" : "Area ignored",
+        description: `${cam.name} will no longer alert for this spot. Edit it under Cameras.`,
+      });
+    } catch (e) {
+      toast({ tone: "error", title: "Could not ignore this area", description: e instanceof Error ? e.message : undefined });
     }
   };
 
@@ -229,7 +256,7 @@ export default function Incidents() {
                   aria-pressed={selecting ? selected.has(i.id) : undefined}
                 >
                   {i.snapshot_url && <img src={i.snapshot_url} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />}
-                  <div className="absolute left-3 top-3"><LabelBadge label={i.label} /></div>
+                  <div className="absolute left-3 top-3 flex gap-1.5">{labelsOf(i).map((l) => <LabelBadge key={l} label={l} />)}</div>
                   <div className="absolute right-3 top-3 rounded-md bg-black/60 px-2 py-0.5 text-xs font-semibold tabular-nums text-white backdrop-blur">{Math.round(i.confidence * 100)}%</div>
                   {selecting && (
                     <div className={`absolute bottom-3 left-3 flex h-6 w-6 items-center justify-center rounded-md border-2 ${selected.has(i.id) ? "border-ember-500 bg-ember-500 text-white" : "border-white/80 bg-black/50 text-transparent"}`}>
@@ -304,7 +331,7 @@ export default function Incidents() {
         )}
       </AnimatePresence>
 
-      <Detail incident={open} onClose={() => setOpen(null)} onReview={review} onDelete={setDeleting} />
+      <Detail incident={open} onClose={() => setOpen(null)} onReview={review} onDelete={setDeleting} onIgnore={open && canIgnore(open) ? ignoreArea : undefined} />
       <ConfirmDialog
         open={confirmBulk}
         title={`Delete ${selected.size} ${selected.size === 1 ? "incident" : "incidents"}?`}
@@ -322,6 +349,17 @@ export default function Incidents() {
       />
     </>
   );
+}
+
+/** One event can show both a flame and its smoke: the incident is filed under one label, but both are worth showing. */
+function labelsOf(i: Incident): Label[] {
+  const seen = new Set<Label>([i.label, ...i.detections.map((d) => d.label)]);
+  return (["fire", "smoke"] as Label[]).filter((l) => seen.has(l));
+}
+
+function objectsText(i: Incident): string {
+  if (!i.detections.length) return "1";
+  return labelsOf(i).map((l) => `${i.detections.filter((d) => d.label === l).length} ${l}`).join(", ");
 }
 
 function Duration({ incident }: { incident: Incident }) {
@@ -351,7 +389,7 @@ function AccuracyBar({ stats }: { stats: Stats }) {
   );
 }
 
-function Detail({ incident, onClose, onReview, onDelete }: { incident: Incident | null; onClose: () => void; onReview: (i: Incident, s: ReviewStatus) => void; onDelete: (i: Incident) => void }) {
+function Detail({ incident, onClose, onReview, onDelete, onIgnore }: { incident: Incident | null; onClose: () => void; onReview: (i: Incident, s: ReviewStatus) => void; onDelete: (i: Incident) => void; onIgnore?: (i: Incident) => void }) {
   const [clean, setClean] = useState(false);
   useEffect(() => setClean(false), [incident?.id]);
   return (
@@ -368,20 +406,26 @@ function Detail({ incident, onClose, onReview, onDelete }: { incident: Incident 
             )}
           </div>
           <div className="space-y-5 text-sm">
-            <div className="flex flex-wrap gap-2"><LabelBadge label={incident.label} /><ReviewBadge status={incident.status} /></div>
+            <div className="flex flex-wrap gap-2">{labelsOf(incident).map((l) => <LabelBadge key={l} label={l} />)}<ReviewBadge status={incident.status} /></div>
             <dl className="space-y-2">
               <Row k="Confidence" v={`${Math.round(incident.confidence * 100)}%`} />
               <Row k="Camera" v={incident.camera_name ?? "–"} />
               <Row k="Source" v={incident.source} />
               <Row k="Detected" v={new Date(incident.created_at).toLocaleString()} />
               <Row k="Duration" v={isOngoing(incident) ? "Ongoing" : formatDuration(incident.duration_s ?? 0)} />
-              <Row k="Objects" v={String(incident.detections.length || 1)} />
+              <Row k="Objects" v={objectsText(incident)} />
             </dl>
             <div>
               <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">Was this a real hazard?</div>
               <ReviewButtons size="md" status={incident.status} onChange={(s) => onReview(incident, s)} />
               <p className="mt-2 text-xs text-slate-500">Your answer feeds the accuracy score and the retraining export.</p>
             </div>
+            {onIgnore && (
+              <div>
+                <button onClick={() => onIgnore(incident)} className="btn-ghost w-full"><EyeOff size={16} /> Ignore this area</button>
+                <p className="mt-2 text-xs text-slate-500">For a fixed false-alarm source such as a fan's shadow: files this as a false alarm and stops this spot from alerting on {incident.camera_name}.</p>
+              </div>
+            )}
             <button onClick={() => onDelete(incident)} className="btn-ghost w-full text-red-300 hover:bg-red-500/10"><Trash2 size={16} /> Delete incident</button>
           </div>
         </div>

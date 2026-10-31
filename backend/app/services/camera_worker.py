@@ -15,8 +15,8 @@ from ..schemas.camera import CameraState
 from .confirmation import AlarmTracker
 from .detector import DetectorLike, timed_predict
 from .episodes import EpisodeRecorder, Publish
-from .imaging import annotate, draw_zone, encode_jpeg, resize_to_width
-from .zones import Zone, filter_by_zone
+from .imaging import annotate, draw_ignored, draw_zone, encode_jpeg, resize_to_width
+from .zones import Area, Zone, filter_by_zone, filter_ignored, filter_smoke
 
 log = logging.getLogger("smokeshield.camera")
 
@@ -38,12 +38,17 @@ class CameraConfig:
     cooldown: int  # merge window: detections closer together than this belong to one incident
     imgsz: int | None
     zone: Zone | None
+    detect_smoke: bool = True
+    smoke_confidence: float = 0.0  # effective bar for smoke; never below the camera's general confidence
+    ignore_areas: tuple[Area, ...] = ()
 
     @classmethod
     def from_model(cls, cam) -> "CameraConfig":
         zone = [(float(x), float(y)) for x, y in cam.zone] if cam.zone else None
+        areas = tuple((float(a), float(b), float(c), float(d)) for a, b, c, d in (cam.ignore_areas or []))
         return cls(cam.id, cam.name, cam.source_type, cam.source, cam.confidence,
-                   cam.confirm_frames, cam.confirm_window, cam.cooldown, cam.imgsz, zone)
+                   cam.confirm_frames, cam.confirm_window, cam.cooldown, cam.imgsz, zone,
+                   bool(cam.detect_smoke), max(cam.confidence, cam.smoke_confidence or 0.0), areas)
 
 
 def open_capture(source_type: str, source: str) -> cv2.VideoCapture | None:
@@ -167,12 +172,14 @@ class CameraWorker(threading.Thread):
     def _process(self, frame: np.ndarray) -> None:
         cfg = self.cfg
         dets, latency = timed_predict(self._detector, frame, cfg.confidence, cfg.imgsz)
+        dets = filter_smoke(dets, cfg.detect_smoke, cfg.smoke_confidence)
+        dets = filter_ignored(dets, cfg.ignore_areas)
         dets = filter_by_zone(dets, cfg.zone)
         now = time.monotonic()
         result = self._tracker.update(dets, now)
         status = "fire" if "fire" in result.active else "smoke" if "smoke" in result.active else "ok"
 
-        vis = annotate(draw_zone(frame, cfg.zone), result.shown, result.pending)
+        vis = annotate(draw_ignored(draw_zone(frame, cfg.zone), cfg.ignore_areas), result.shown, result.pending)
         jpeg = encode_jpeg(resize_to_width(vis, 960), 72)
 
         wall = time.time()

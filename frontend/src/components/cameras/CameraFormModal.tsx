@@ -1,10 +1,11 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, FileVideo, Loader2, Radio, ScanEye, Upload, Webcam } from "lucide-react";
-import { FormEvent, useEffect, useRef, useState } from "react";
-import { api, Camera, CameraInput, DetailSize, Point, SourceType } from "../../lib/api";
+import { CheckCircle2, EyeOff, FileVideo, Loader2, Radio, ScanEye, Upload, Webcam } from "lucide-react";
+import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { api, Area, Camera, CameraInput, DetailSize, Point, SourceType } from "../../lib/api";
 import { Modal } from "../Modal";
 import { Switch } from "../Switch";
 import { useToast } from "../Toast";
+import { AreaEditor } from "./AreaEditor";
 import { ZoneEditor } from "./ZoneEditor";
 
 const SOURCES: { type: SourceType; label: string; hint: string; icon: typeof Radio }[] = [
@@ -32,21 +33,33 @@ const COOLDOWNS = [15, 30, 60, 120, 300, 600, 1800, 3600];
 const cooldownLabel = (s: number) => (s < 60 ? `${s} seconds` : s < 3600 ? `${s / 60} min` : "1 hour");
 const WORKER_FPS = 4; // keep in sync with SMOKESHIELD_WORKER_FPS
 
-interface FormState extends Omit<CameraInput, "zone"> {
+interface FormState extends Omit<CameraInput, "zone" | "ignore_areas"> {
   zone: Point[];
   zoneEnabled: boolean;
+  ignore_areas: Area[];
 }
 
 const blank: FormState = {
   name: "", source_type: "stream", source: "", enabled: true,
   confidence: 0.4, confirm_frames: 3, confirm_window: 5, cooldown: 30, imgsz: null, zone: [], zoneEnabled: false,
+  detect_smoke: true, smoke_confidence: null, ignore_areas: [],
 };
+
+// Smoke is the class that shadows, steam and dust fool, so it can be held to a higher bar than fire (or switched off).
+const SMOKE_LEVELS: { key: string; label: string; detect: boolean; confidence: number | null }[] = [
+  { key: "same", label: "Same as fire (default)", detect: true, confidence: null },
+  { key: "0.6", label: "Stricter - 60% confidence", detect: true, confidence: 0.6 },
+  { key: "0.7", label: "Strict - 70% confidence", detect: true, confidence: 0.7 },
+  { key: "0.8", label: "Very strict - 80% confidence", detect: true, confidence: 0.8 },
+  { key: "off", label: "Off - fire only", detect: false, confidence: null },
+];
 
 // Pick only editable fields: spreading the whole Camera would send id/created_at, which the API rejects.
 const fromCamera = (c: Camera): FormState => ({
   name: c.name, source_type: c.source_type, source: c.source, enabled: c.enabled,
   confidence: c.confidence, confirm_frames: c.confirm_frames, confirm_window: c.confirm_window, cooldown: c.cooldown, imgsz: c.imgsz ?? null,
   zone: c.zone ?? [], zoneEnabled: !!c.zone,
+  detect_smoke: c.detect_smoke ?? true, smoke_confidence: c.smoke_confidence ?? null, ignore_areas: c.ignore_areas ?? [],
 });
 
 interface Props {
@@ -87,6 +100,12 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
 
   const preset = PRESETS.find((p) => p.confidence === f.confidence && p.confirm_frames === f.confirm_frames && p.confirm_window === f.confirm_window && p.cooldown === f.cooldown && p.imgsz === f.imgsz);
 
+  const smokeKey = !f.detect_smoke
+    ? "off"
+    : f.smoke_confidence === null
+      ? "same"
+      : SMOKE_LEVELS.find((l) => l.confidence === f.smoke_confidence)?.key ?? "custom";
+
   const pickType = (type: SourceType) => {
     if (type === f.source_type) return;
     setF((s) => ({ ...s, source_type: type, source: type === "device" ? "0" : "", zone: [] }));
@@ -121,6 +140,18 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
 
   const sourceReady = f.source.trim().length > 0;
 
+  /** Shared by the zone and ignored-area editors: both draw on the same grabbed frame. */
+  const previewLoader = (label: string): ReactNode => (
+    <div className="grid place-items-center gap-3 rounded-xl border border-dashed border-ink-600 p-8 text-center text-sm text-slate-500">
+      {preview.error && <p className="text-red-300">{preview.error}</p>}
+      <button type="button" onClick={loadPreview} disabled={!sourceReady || preview.loading} className="btn-ghost">
+        {preview.loading ? <Loader2 size={16} className="animate-spin" /> : <ScanEye size={16} />}
+        {preview.loading ? "Grabbing a frame…" : label}
+      </button>
+      {!sourceReady && <p className="text-xs">Set the camera source first.</p>}
+    </div>
+  );
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -129,7 +160,7 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
     if (f.zoneEnabled && f.zone.length < 3) return setError("A zone needs at least 3 points - or turn the zone off.");
 
     const { zone, zoneEnabled, ...rest } = f;
-    const body: CameraInput = { ...rest, name: f.name.trim(), zone: zoneEnabled ? zone : null };
+    const body: CameraInput = { ...rest, name: f.name.trim(), zone: zoneEnabled ? zone : null, ignore_areas: f.ignore_areas.length ? f.ignore_areas : null };
     setSaving(true);
     try {
       const saved = camera ? await api.updateCamera(camera.id, body) : await api.createCamera(body);
@@ -235,6 +266,20 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
           </select>
         </Field>
 
+        <Field label="Smoke sensitivity" hint="Shadows, steam and dust are the most common smoke false alarms. If a ceiling fan's shadow or a kettle sets it off, make smoke stricter here: fire sensitivity is not affected. Draw an ignored area below for a shadow that never moves.">
+          <select
+            value={smokeKey}
+            onChange={(e) => {
+              const level = SMOKE_LEVELS.find((l) => l.key === e.target.value);
+              if (level) setF((s) => ({ ...s, detect_smoke: level.detect, smoke_confidence: level.confidence }));
+            }}
+            className="input"
+          >
+            {smokeKey === "custom" && <option value="custom">Custom - {Math.round((f.smoke_confidence ?? 0) * 100)}% confidence</option>}
+            {SMOKE_LEVELS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}
+          </select>
+        </Field>
+
         <div>
           <div className="text-sm font-medium text-slate-300">Temporal confirmation</div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-400">
@@ -269,21 +314,26 @@ function Form({ camera, onClose, onSaved }: Omit<Props, "open">) {
         <AnimatePresence initial={false}>
           {f.zoneEnabled && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-              {preview.url ? (
-                <ZoneEditor imageUrl={preview.url} value={f.zone} onChange={(z) => set("zone", z)} />
-              ) : (
-                <div className="grid place-items-center gap-3 rounded-xl border border-dashed border-ink-600 p-8 text-center text-sm text-slate-500">
-                  {preview.error && <p className="text-red-300">{preview.error}</p>}
-                  <button type="button" onClick={loadPreview} disabled={!sourceReady || preview.loading} className="btn-ghost">
-                    {preview.loading ? <Loader2 size={16} className="animate-spin" /> : <ScanEye size={16} />}
-                    {preview.loading ? "Grabbing a frame…" : "Load a preview frame to draw the zone"}
-                  </button>
-                  {!sourceReady && <p className="text-xs">Set the camera source first.</p>}
-                </div>
-              )}
+              {preview.url ? <ZoneEditor imageUrl={preview.url} value={f.zone} onChange={(z) => set("zone", z)} /> : previewLoader("Load a preview frame to draw the zone")}
             </motion.div>
           )}
         </AnimatePresence>
+      </section>
+
+      {/* ---- ignored areas ---- */}
+      <section className="space-y-3">
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-heading"><EyeOff size={16} /> Ignored areas</h3>
+          <p className="text-xs text-slate-500">Cover a fixed false-alarm source, such as a ceiling-fan shadow, a window or a TV. Detections that fall mostly inside a box are dropped; everything else is still watched.</p>
+        </div>
+        {preview.url ? (
+          <AreaEditor imageUrl={preview.url} value={f.ignore_areas} onChange={(a) => set("ignore_areas", a)} />
+        ) : (
+          <>
+            {f.ignore_areas.length > 0 && <p className="text-xs text-slate-400">{f.ignore_areas.length} ignored {f.ignore_areas.length === 1 ? "area" : "areas"} saved. Load a preview frame to see or change {f.ignore_areas.length === 1 ? "it" : "them"}.</p>}
+            {previewLoader("Load a preview frame to mark ignored areas")}
+          </>
+        )}
       </section>
 
       <div className="flex items-center justify-between rounded-xl bg-ink-800 p-4">

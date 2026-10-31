@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { FileVideo, Pencil, Plus, Radio, ScanEye, Trash2, Video, Webcam } from "lucide-react";
+import { EyeOff, FileVideo, Pencil, Plus, Radio, ScanEye, Trash2, Video, Webcam } from "lucide-react";
 import { useState } from "react";
 import { CameraFormModal } from "../components/cameras/CameraFormModal";
 import { ConfirmDialog } from "../components/Modal";
@@ -107,6 +107,9 @@ export default function Cameras() {
                     <Tag>{c.confirm_frames}/{c.confirm_window} frames</Tag>
                     <Tag>Cooldown {c.cooldown >= 60 ? `${Math.round(c.cooldown / 60)}m` : `${c.cooldown}s`}</Tag>
                     {c.zone && <Tag highlight><ScanEye size={12} /> Zone</Tag>}
+                    {!c.detect_smoke && <Tag highlight>Fire only</Tag>}
+                    {c.detect_smoke && c.smoke_confidence && <Tag>Smoke {Math.round(c.smoke_confidence * 100)}%+</Tag>}
+                    {!!c.ignore_areas?.length && <Tag highlight><EyeOff size={12} /> {c.ignore_areas.length} ignored</Tag>}
                   </div>
                 </div>
 
